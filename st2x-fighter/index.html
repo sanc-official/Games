@@ -544,12 +544,32 @@ function playSnd(k,vol){
 }
 function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
 
-function voice(f,kind,vol){
+function voice(f,kind,vol,opts){
   const vc=f.chr.voice; if(!vc) return;
-  const key = kind==='attack' ? 'v_'+vc+'_'+pick(['attack1','attack2','attack3'])
-            : kind==='damage' ? 'v_'+vc+'_'+pick(['damage1','damage2'])
-            : 'v_'+vc+'_'+kind;
-  playSnd(key, vol==null?0.85:vol);
+  opts=opts||{};
+  // クールダウン: 短時間にボイスが重なりすぎないよう抑制（KO/勝利/開始/必殺は force で無視）
+  if(!opts.force && f._vcd!=null && game.frame < f._vcd) return;
+  f._vcd = game.frame + (opts.cd!=null ? opts.cd : 16);
+  playSnd('v_'+vc+'_'+kind, vol==null?0.8:vol);
+}
+
+// 通常攻撃でボイスを鳴らす確率（キャラの性格で喋りすぎを調整）
+const VOICE_ATK_FREQ={ ryuji:0.40, aoi:0.45, bront:0.40, sayo:0.30, gouma:0.20, kensei:0.40, prism:0.25 };
+// 行動情報から voice kind を決定（完全ランダムを廃止し、攻撃の強さ・種別で固定/重み付け）
+function attackVoiceKind(info){
+  if(info.special) return 'special1';                                  // 必殺/超必/特殊行動
+  if(info.throw)   return Math.random()<0.5 ? 'attack3' : 'special1';  // 投げ
+  if(info.mash)    return (game.frame>>3)&1 ? 'attack2' : 'attack1';   // 連打技は1/2交互
+  if(info.air)     return Math.random()<0.5 ? 'attack2' : 'attack3';   // 空中攻撃
+  return info.str==='h' ? 'attack3' : info.str==='m' ? 'attack2' : 'attack1';  // 弱→1 中→2 強→3
+}
+// 攻撃ボイス発火: 必殺技は確実、通常攻撃はキャラ別確率＋クールダウンで控えめに
+function attackVoice(f,info){
+  info=info||{};
+  const kind=attackVoiceKind(info);
+  if(kind==='special1'){ voice(f,'special1', 0.9, {force:true, cd:22}); return; }
+  const freq=VOICE_ATK_FREQ[f.chr.voice] ?? 0.35;
+  if(Math.random()<freq) voice(f, kind, info.str==='h' ? 0.82 : 0.68);
 }
 
 const SFX={
@@ -824,7 +844,7 @@ class Fighter{
     if(!this.atk){ this.atk=this.chr.atk.s_lp; this.atkName='s_lp'; }
     this.state='atk'; this.t=0; this.hitConsumed=false;
     SFX.swing();
-    if(Math.random()<0.3) voice(this,'attack',0.7);
+    attackVoice(this,{str:this.atk.str, mash:this.atk.mash});
   }
   // ---- 投げ ----
   throwable(opp){
@@ -834,11 +854,12 @@ class Fighter{
     const dir=(opp.x>=this.x)?1:-1;
     game.lastHitSuper=!!sup;
     game.hitstop=9; game.shake=8;
-    SFX.heavy(); voice(this,vName||'attack',0.9);
+    SFX.heavy();
+    if(vName==='special1') voice(this,'special1',0.9,{force:true,cd:22}); else attackVoice(this,{throw:true});
     spark(opp.x,opp.y-60,'#ffd24a',12);
     opp.hp=Math.max(0,opp.hp-dmg);
     opp.flashT=4; opp.airAtk=null;
-    if(opp.hp<=0) voice(opp,'death1',0.95); else voice(opp,'damage',0.8);
+    if(opp.hp<=0) voice(opp,'death1',0.95,{force:true}); else voice(opp,'damage2',0.78);
     opp.state='fall'; opp.t=0; opp.vy=-8.5; opp.vx=dir*4.4;
     this.meter=Math.min(100,this.meter+10);
     game.score[this.idx]+=dmg*105;
@@ -871,7 +892,7 @@ class Fighter{
     }else{
       this.state='rush'; this.t=0; this.hitConsumed=false;
       this.rushCfg=cfg; this.vx=this.facing*cfg.spd;
-      SFX.dp(); voice(this,'attack',0.85);
+      SFX.dp(); attackVoice(this,{special:true});
     }
     return true;
   }
@@ -879,7 +900,7 @@ class Fighter{
   specialBeam(alt){
     const cfg= alt ? this.chr.sp.supAlt : this.chr.sp.sup;
     if(!cfg || this.meter<100) return false;
-    this.meter=0; game.flash=14; SFX.super(); voice(this,'special1',0.95);
+    this.meter=0; game.flash=14; SFX.super(); voice(this,'special1',0.95,{force:true,cd:26});
     this.state='beam'; this.t=0; this.hitConsumed=true;
     this.beamCfg={dmg:cfg.dmg, name:cfg.name, fast:!!cfg.fast};
     this.beamWind = cfg.fast?6:14; this.beamActive=18; this.beamRec=16;
@@ -890,7 +911,7 @@ class Fighter{
     const c=this.chr.sp.opticSweep; if(!c) return false;
     if(projectiles.some(pr=>pr.owner===this&&!pr.dead&&pr.low)) return true;
     this.state='fb'; this.t=0; this.fbSpawned=false; this.fbSuper=false; this.fbOptic=true;
-    SFX.fb(); voice(this,'attack',0.8);
+    SFX.fb(); attackVoice(this,{special:true});
     return true;
   }
   specialFB(sup){
@@ -898,9 +919,9 @@ class Fighter{
     if(sup && this.meter<100) return;
     if(sup && cfg.type==='beam'){ this.specialBeam(false); return; }  // ビーム超必へ委譲
     if(cfg.type==='proj' && projectiles.some(pr=>pr.owner===this&&!pr.dead)) return;
-    if(sup){ this.meter=0; game.flash=14; SFX.super(); voice(this,'special1',0.95); }
-    else if(cfg.type==='proj'){ SFX.fb(); voice(this,'attack',0.85); }
-    else { SFX.dp(); voice(this,'attack',0.85); }
+    if(sup){ this.meter=0; game.flash=14; SFX.super(); voice(this,'special1',0.95,{force:true,cd:26}); }
+    else if(cfg.type==='proj'){ SFX.fb(); attackVoice(this,{special:true}); }
+    else { SFX.dp(); attackVoice(this,{special:true}); }
     if(cfg.type==='proj'){
       this.state='fb'; this.t=0; this.fbSpawned=false; this.fbSuper=!!sup;
     }else{
@@ -914,20 +935,20 @@ class Fighter{
       // ブロント: クレーンキャッチ（対空投げ）
       const opp=(this===p1)?p2:p1;
       if((opp.state==='jump'||opp.state==='fall'||opp.y<GROUND-10) && Math.abs(opp.x-this.x)<84){
-        voice(this,'special1',0.9);
+        voice(this,'special1',0.9,{force:true,cd:22});
         this.doThrow(opp,d.dmg,'special1');
         return;
       }
     }
     this.state='dp'; this.t=0; this.vy=d.vy; this.hitConsumed=false; SFX.dp();
-    voice(this,'special1',0.9);
+    voice(this,'special1',0.9,{force:true,cd:22});
   }
   takeHit(dmg,dir,kd){
     this.hp=Math.max(0,this.hp-dmg);
     this.flashT=5;
     this.meter=Math.min(100,this.meter+8);
-    if(this.hp<=0){ kd=true; voice(this,'death1',0.95); }
-    else voice(this,'damage',0.75);
+    if(this.hp<=0){ kd=true; voice(this,'death1',0.95,{force:true}); }
+    else { const heavyHit = dmg>=11 || kd; voice(this, heavyHit?'damage2':'damage1', 0.72); }
     this.airAtk=null;
     if(kd || this.state==='jump' || this.y<GROUND-1){
       this.state='fall'; this.t=0; this.vy=-9; this.vx=dir*3.4;
@@ -1038,13 +1059,13 @@ class Fighter{
           const c=this.chr.sp.airFb;
           projectiles.push({x:this.x+this.facing*30, y:this.y-70, vx:this.facing*c.spd, vy:c.vy,
             owner:this, sup:false, dead:false, t:0, dmg:c.dmg, r:c.r, warm:!!c.warm, life:9999});
-          SFX.fb(); voice(this,'attack',0.85);
+          SFX.fb(); attackVoice(this,{special:true});
         }
         else if(this.bufP>0 && this.chr.sp.airDrop && !this.airAtk && this.checkSeq([2,1,4])){
           // プリズムガード: フォトンドロップ（空中214P / 落下打撃投げ風）
           this.bufP=0; this.airAtk={t:0,drop:true}; this.hitConsumed=false;
           this.vy=Math.max(this.vy,1.5); this.vx=this.facing*2.5;
-          SFX.dp(); voice(this,'special1',0.85);
+          SFX.dp(); voice(this,'special1',0.85,{force:true,cd:22});
         }
         else if(this.bufP>0||this.bufK>0){ this.bufP=0; this.bufK=0; this.airAtk={t:0}; this.hitConsumed=false; }
         if(this.y>=GROUND){ this.y=GROUND; this.vy=0; this.vx=0; this.airAtk=null; this.airFb=false; this.state='idle'; }
@@ -1099,7 +1120,7 @@ class Fighter{
             else this.specialFB(false);
           }
           else if(this.chr.sp.mash && this.pTimes.length>=3 && (this.frame-this.pTimes[this.pTimes.length-3])<=26){
-            this.startAttack('mash'); SFX.dp(); voice(this,'special1',0.85);
+            this.startAttack('mash'); SFX.dp();   // mashのボイスは startAttack 内の attackVoice(mash) で発火
           }
           else if(fwdHeld && dist<48 && this.throwable(opp) && this.state!=='crouch'){
             this.doThrow(opp,12); // 共通通常投げ
@@ -1503,7 +1524,7 @@ function step(){
     case 'intro':{
       p1.update(EMPTY_INP,p2); p2.update(EMPTY_INP,p1);
       game.stateTimer--;
-      if(game.stateTimer===110 && game.round===1) voice(p1,'start1',0.85);
+      if(game.stateTimer===110 && game.round===1) voice(p1,'start1',0.85,{force:true});
       if(game.stateTimer===45) SFX.round();
       if(game.stateTimer<=0) game.state='fight';
       break;
@@ -1532,7 +1553,7 @@ function step(){
       if(game.stateTimer===70 && game.winner>=0){
         const wf=game.winner===0?p1:p2;
         if(['idle','walk','crouch'].includes(wf.state)) wf.state='win';
-        voice(wf,'win1',0.9);
+        voice(wf,'win1',0.9,{force:true});
       }
       if(game.stateTimer<=0){
         if(game.winner>=0) game.wins[game.winner]++;
