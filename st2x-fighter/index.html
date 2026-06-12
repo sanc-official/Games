@@ -154,29 +154,29 @@ const EXTRA_PRISM={
 
 // ================= キャラクター定義 =================
 const CHARS={
-  ryuji:{ id:'ryuji', name:'リュウジ', title:'港町の拳', img:'ryuji', frames:F_RYUJI, scale:0.65, roles:ROLES_RYUJI, voice:'ryuji',
+  ryuji:{ id:'ryuji', name:'リュウジ', title:'港町の拳', img:'ryuji', frames:F_RYUJI, scale:0.84, roles:ROLES_RYUJI, voice:'ryuji',
     sp:{ fb:{type:'proj', name:'烈火弾', spd:6.2, dmg:10, r:20},
          dp:{name:'牙昇拳', dmg:16, vy:-13.5},
          tatsu:{type:'rush', name:'旋風脚', spd:7.5, dmg:12, dur:22},
          sup:{type:'proj', name:'嵐砕波', spd:9.5, dmg:30, r:30} }},
-  aoi:{ id:'aoi', name:'アオイ', title:'奪われたリング', img:'aoi', frames:F_AOI, scale:0.65, roles:ROLES_AOI, voice:'aoi',
+  aoi:{ id:'aoi', name:'アオイ', title:'奪われたリング', img:'aoi', frames:F_AOI, scale:0.82, roles:ROLES_AOI, voice:'aoi',
     sp:{ fb:{type:'proj', name:'弧月針', spd:7.6, dmg:9, r:14, life:40},
          dp:{name:'天砕踵', dmg:15, vy:-14.5},
          tatsu:{type:'rush', name:'螺旋穿ち', spd:10, dmg:13, dur:18, low:true},
          sup:{type:'rush', name:'流星連脚', spd:11, dmg:32, dur:20} }},
-  bront:{ id:'bront', name:'ブロント', title:'鉄屑街の怪腕', img:'bront', frames:F_BRONT, scale:0.72, roles:ROLES_GEN, voice:'bront',
+  bront:{ id:'bront', name:'ブロント', title:'鉄屑街の怪腕', img:'bront', frames:F_BRONT, scale:0.94, roles:ROLES_GEN, voice:'bront',
     sp:{ fb:{type:'rush', name:'アイアンショルダー', spd:8.5, dmg:14, dur:20},
          dp:{name:'クレーンキャッチ', dmg:18, vy:-10, airGrab:true},
          cmdGrab:{name:'ブレイカークラッチ', dmg:22, range:62},
          supGrab:{name:'スクラップサイクロン', dmg:34, range:66},
          sup:{type:'rush', name:'スクラップサイクロン', spd:9.5, dmg:30, dur:22} }},
-  sayo:{ id:'sayo', name:'サヨ', title:'夜路地の影足', img:'sayo', frames:F_SAYO, scale:0.62, roles:ROLES_GEN, voice:'sayo',
+  sayo:{ id:'sayo', name:'サヨ', title:'夜路地の影足', img:'sayo', frames:F_SAYO, scale:0.78, roles:ROLES_GEN, voice:'sayo',
     sp:{ fb:{type:'rush', name:'閃影スライド', spd:12, dmg:10, dur:16, low:true},
          dp:{name:'月影膝', dmg:14, vy:-15.5},
          tatsu:{type:'move', name:'扇歩', spd:9, dur:10},
          mash:{name:'百裂掌', dmg:4},
          sup:{type:'rush', name:'夜霞三連', spd:13, dmg:30, dur:20, low:true} }},
-  gouma:{ id:'gouma', name:'ゴウマ', title:'無敗の実験格闘家', img:'gouma', frames:F_GOUMA, scale:0.70, roles:ROLES_GOUMA, voice:'gouma', boss:true,
+  gouma:{ id:'gouma', name:'ゴウマ', title:'無敗の実験格闘家', img:'gouma', frames:F_GOUMA, scale:0.94, roles:ROLES_GOUMA, voice:'gouma', boss:true,
     sp:{ fb:{type:'proj', name:'虚空弾', spd:8.6, dmg:12, r:22, warm:true},
          airFb:{name:'空虚弾', spd:7, vy:3.4, dmg:10, r:18, warm:true},
          dp:{name:'紅蓮昇', dmg:20, vy:-14},
@@ -185,7 +185,7 @@ const CHARS={
          sup:{type:'proj', name:'殲滅核', spd:11, dmg:38, r:34, warm:true} }},
   // ケンセイ・ノヴァ: 白道着＋赤グローブのオリジナル。リュウジ系の波動昇龍型（別スキン相当）。
   // char-kensei-nova.png は 1536x1024 / 8x4 の生成シート → sliceSheetByGrid で切り出し、ROLES_GEN を使用。
-  kenseiNova:{ id:'kenseiNova', name:'ケンセイ・ノヴァ', title:'白道着の閃', img:'kensei', frames:null, scale:0.66, roles:ROLES_KENSEI, voice:'kensei',
+  kenseiNova:{ id:'kenseiNova', name:'ケンセイ・ノヴァ', title:'白道着の閃', img:'kensei', frames:null, scale:0.86, roles:ROLES_KENSEI, voice:'kensei',
     sp:{ fb:{type:'proj', name:'閃光弾', spd:6.6, dmg:10, r:20},
          dp:{name:'昇閃拳', dmg:16, vy:-13.5},
          tatsu:{type:'rush', name:'旋衝脚', spd:7.8, dmg:12, dur:22},
@@ -193,13 +193,13 @@ const CHARS={
   // プリズムガード: ビーム特化のオリジナルキャラ。横ビーム/対空/連打/足元ビーム/巨大ビーム超必。
   // base = char-prism-guard.png (1536x1024 / 8x4), extra = char-prism-guard-extra.png (1717x916 / 8x4)。
   // どちらも sliceSheetByGrid(img, 8, 4) で image.width/8, image.height/4 ごとに切る。
-  prismGuard:{ id:'prismGuard', name:'プリズムガード', title:'光学戦術兵', img:'prism', frames:null, scale:0.66, roles:ROLES_PRISM, voice:'prism',
+  prismGuard:{ id:'prismGuard', name:'プリズムガード', title:'光学戦術兵', img:'prism', frames:null, scale:0.92, roles:ROLES_PRISM, voice:'prism',
     extraImg:'prismx', extraFrames:null, extra:EXTRA_PRISM,
-    sp:{ fb:{type:'proj', name:'プリズムショット', spd:11, dmg:11, r:10, beamThin:true},   // 236P 細い水平ビーム
+    sp:{ fb:{type:'proj', name:'プリズムショット', spd:11, dmg:11, r:14, beamThin:true},   // 236P 細い水平ビーム
          dp:{name:'ライジングプリズム', dmg:15, vy:-13.5},                                   // 623P 対空アッパー
          tatsu:{type:'rush', name:'サイクロンブーツ', spd:9.5, dmg:13, dur:20},              // 214K 回転蹴り
          mash:{name:'ラピッドバースト', dmg:4},                                              // P連打 近距離連打
-         opticSweep:{type:'projLow', name:'ロー・レイ', spd:9, dmg:10, r:10, life:80, beamThin:true}, // 236K 足元ビーム
+         opticSweep:{type:'projLow', name:'ロー・レイ', spd:9, dmg:10, r:13, life:80, beamThin:true}, // 236K 足元ビーム
          airDrop:{name:'フォトンドロップ', dmg:16},                                          // 空中214P 落下打撃
          sup:{type:'beam', name:'メガ・レイバースト', dmg:34},                               // 236236P 巨大ビーム
          supAlt:{type:'beam', name:'スーパー・レイバースト', dmg:40, fast:true} }},          // 214214P 発生重視巨大ビーム
@@ -734,7 +734,7 @@ let projectiles=[];
 function spawnProj(owner,sup){
   const cfg=sup?owner.chr.sp.sup:owner.chr.sp.fb;
   projectiles.push({
-    x:owner.x+owner.facing*44, y:owner.y-72,
+    x:owner.x+owner.facing*44, y:owner.y-72*owner.hitScale,
     vx:owner.facing*cfg.spd, owner, sup, dead:false, t:0,
     dmg:cfg.dmg, r:cfg.r||20, warm:!!cfg.warm, life:cfg.life||9999, beamThin:!!cfg.beamThin
   });
@@ -744,6 +744,8 @@ function spawnProj(owner,sup){
 class Fighter{
   constructor(idx,chr,opts){
     this.idx=idx; this.chr=chr; this.name=chr.name;
+    // 当たり判定スケール: 見た目scaleに連動（基準0.66）。判定boxとビーム位置の倍率に使う。
+    this.hitScale = chr.scale / 0.66;
     this.tint=null;
     if(opts&&opts.shadow){ this.tint='brightness(0.4) saturate(50%)'; this.name='影・'+chr.name; }
     this.reset(0,1);
@@ -771,17 +773,20 @@ class Fighter{
     return false;
   }
   hurtbox(){
-    if(this.state==='down'||this.state==='getup') return {x:this.x-30,y:this.y-22,w:60,h:22};
-    if(this.state==='rush'&&this.rushCfg&&this.rushCfg.low) return {x:this.x-26,y:this.y-46,w:52,h:46};
-    if(this.state==='jump'||this.state==='fall'||this.state==='dp') return {x:this.x-20,y:this.y-96,w:40,h:74};
+    const s=this.hitScale;
+    if(this.state==='down'||this.state==='getup') return {x:this.x-30*s,y:this.y-22*s,w:60*s,h:22*s};
+    if(this.state==='rush'&&this.rushCfg&&this.rushCfg.low) return {x:this.x-26*s,y:this.y-46*s,w:52*s,h:46*s};
+    if(this.state==='jump'||this.state==='fall'||this.state==='dp') return {x:this.x-20*s,y:this.y-96*s,w:40*s,h:74*s};
     let h=100;
     if(this.state==='crouch'||this.state==='dpland') h=66;
     if(this.state==='atk'&&this.atk&&this.atk.crouch) h=66;
     if(this.state==='block'&&this.crouchHeld) h=66;
-    return {x:this.x-22,y:this.y-h,w:44,h:h};
+    return {x:this.x-22*s,y:this.y-h*s,w:44*s,h:h*s};
   }
   worldBox(b){
-    return { x: this.facing===1 ? this.x+b.x : this.x-b.x-b.w, y:this.y+b.y, w:b.w, h:b.h };
+    const s=this.hitScale;
+    const bx=b.x*s, by=b.y*s, bw=b.w*s, bh=b.h*s;
+    return { x: this.facing===1 ? this.x+bx : this.x-bx-bw, y:this.y+by, w:bw, h:bh };
   }
   activeHitbox(){
     if(this.hitConsumed) return null;
@@ -1818,11 +1823,12 @@ function drawBeamSuper(f){
   const w=f.beamWind, a=f.beamActive;
   if(f.t<=w || f.t>w+a) return;                 // 発射中のみ
   const prog=(f.t-w)/a, dir=f.facing;
-  const y=f.y-80, x0=f.x+dir*34;
+  const s=f.hitScale||1;                        // 見た目scaleに連動（大型化）
+  const y=f.y-80*s, x0=f.x+dir*34*s;
   const x1= dir>0 ? W+40 : -40;
   const reach=Math.min(1,(f.t-w)/4);            // 前方へ素早く伸びる
   const tipX=x0+(x1-x0)*reach;
-  const half=(26+Math.sin(f.t*0.7)*4)*(0.55+0.45*Math.min(1,prog*3));
+  const half=(40+Math.sin(f.t*0.7)*5)*s*(0.55+0.45*Math.min(1,prog*3));
   const left=Math.min(x0,tipX), bw=Math.abs(tipX-x0);
   ctx.save();
   // 横スピードライン
