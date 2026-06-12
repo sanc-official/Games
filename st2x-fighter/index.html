@@ -518,6 +518,9 @@ const SND_FILES={
 const VOICE_KINDS=['attack1','attack2','attack3','special1','damage1','damage2','death1','win1','start1'];
 for(const c of ['ryuji','aoi','bront','sayo','gouma','kensei','prism'])
   for(const k of VOICE_KINDS) SND_FILES['v_'+c+'_'+k]='assets/voice/'+c+'-'+k+'.mp3';
+// プリズムガード専用の追加ボイス（ガード成功時）。他キャラには無いので prism のみロード（不要な404を避ける）。
+SND_FILES['v_prism_guard1']='assets/voice/prism-guard1.mp3';
+SND_FILES['v_prism_guard2']='assets/voice/prism-guard2.mp3';
 
 function loadSounds(){
   for(const [k,url] of Object.entries(SND_FILES)){
@@ -567,6 +570,11 @@ function attackVoiceKind(info){
 function attackVoice(f,info){
   info=info||{};
   const kind=attackVoiceKind(info);
+  // プリズムガード専用: ビーム系の通常必殺（special:true）は special1 ではなく attack2/3 を使い、
+  // special1 は超必ビーム（voice('special1') 直接呼び）に温存する。投げ等の throw 経路は従来通り。
+  if(kind==='special1' && info.special && f.chr.voice==='prism'){
+    voice(f, Math.random()<0.5?'attack2':'attack3', 0.82, {cd:22}); return;
+  }
   if(kind==='special1'){ voice(f,'special1', 0.9, {force:true, cd:22}); return; }
   const freq=VOICE_ATK_FREQ[f.chr.voice] ?? 0.35;
   if(Math.random()<freq) voice(f, kind, info.str==='h' ? 0.82 : 0.68);
@@ -965,6 +973,9 @@ class Fighter{
     this.state='block'; this.stun=stun; this.vx=dir*3; this.crouchHeld=crouching;
     this.meter=Math.min(100,this.meter+4);
     if(chip>0){ this.hp=Math.max(0,this.hp-chip); this.flashT=3; }
+    // プリズムガード専用: ガード成功ボイス（guard1/guard2をランダム）。控えめ確率＋長めクールダウンで連続防御中の重なりを抑制。
+    if(this.chr.voice==='prism' && Math.random()<0.5)
+      voice(this, Math.random()<0.5?'guard1':'guard2', 0.7, {cd:30});
   }
   update(inp,opp){
     this.frame++;
