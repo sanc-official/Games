@@ -1,0 +1,2006 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>SUPER FIGHTER II X — ブラウザ対戦格闘</title>
+<style>
+  html,body{margin:0;padding:0;background:#07070f;height:100%;overscroll-behavior:none;}
+  body{display:flex;align-items:center;justify-content:center;min-height:100vh;flex-direction:column;font-family:"Courier New",monospace;}
+  canvas{image-rendering:auto;width:min(96vw,896px);aspect-ratio:16/9;background:#000;box-shadow:0 0 60px rgba(255,80,0,.15);touch-action:none;}
+  #note{color:#665;font-size:11px;margin-top:8px;}
+
+  /* ---- タッチ操作UI（pointer:coarse 環境のみ表示） ---- */
+  #touch{display:none;position:fixed;inset:0;z-index:10;pointer-events:none;
+    -webkit-user-select:none;user-select:none;-webkit-touch-callout:none;}
+  body.touch-on #touch{display:block;}
+  /* スマホ: キャンバスを必ず画面内に収め（HUDが切れないように）、操作UIは半透明オーバーレイ */
+  body.touch-on{justify-content:flex-start;}
+  body.touch-on canvas{width:min(100vw, calc(100vh * 16 / 9), 896px);}
+  body.touch-on #note{display:none;}
+  #stick{position:absolute;left:max(3vw,12px);bottom:max(3vh,14px);width:min(38vw,160px);
+    aspect-ratio:1;pointer-events:auto;touch-action:none;border-radius:50%;
+    background:rgba(255,255,255,.07);border:2px solid rgba(255,255,255,.25);}
+  #nub{position:absolute;left:50%;top:50%;width:44%;aspect-ratio:1;border-radius:50%;
+    background:rgba(255,210,74,.4);border:2px solid rgba(255,210,74,.7);
+    transform:translate(-50%,-50%);pointer-events:none;}
+  .tbtn{position:absolute;pointer-events:auto;touch-action:none;display:flex;
+    align-items:center;justify-content:center;color:#fff;font-weight:bold;
+    font-family:"Courier New",monospace;}
+  .act{width:min(19vw,86px);aspect-ratio:1;border-radius:50%;font-size:24px;}
+  #btnP{right:min(22vw,104px);bottom:max(13vh,80px);background:rgba(255,90,42,.42);border:2px solid rgba(255,90,42,.85);}
+  #btnK{right:max(3vw,12px);bottom:max(4vh,18px);background:rgba(58,140,244,.42);border:2px solid rgba(58,140,244,.85);}
+  .sys{width:64px;height:36px;border-radius:8px;font-size:12px;
+    background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.45);}
+  #btnStart{right:max(3vw,10px);top:max(env(safe-area-inset-top),8px);}
+  #btnEsc{right:calc(max(3vw,10px) + 74px);top:max(env(safe-area-inset-top),8px);}
+  #btnBgm{right:calc(max(3vw,10px) + 148px);top:max(env(safe-area-inset-top),8px);}
+</style>
+</head>
+<body>
+<canvas id="game" width="896" height="504"></canvas>
+<div id="note">SUPER FIGHTER II X — ストIIX リスペクトのオリジナル格闘ゲーム</div>
+<div id="touch">
+  <div id="stick"><div id="nub"></div></div>
+  <div id="btnP" class="tbtn act">P</div>
+  <div id="btnK" class="tbtn act">K</div>
+  <div id="btnStart" class="tbtn sys">START</div>
+  <div id="btnEsc" class="tbtn sys">ESC</div>
+  <div id="btnBgm" class="tbtn sys">♪BGM</div>
+</div>
+<script>
+"use strict";
+// ================= 基本定数 =================
+const W=896, H=504, GROUND=440, STEP=1000/60;
+const cvs=document.getElementById('game'), ctx=cvs.getContext('2d');
+ctx.imageSmoothingEnabled=true;
+
+// ================= アセット =================
+// [sx, sy, sw, sh, cx, footY]  cx=セル内の足中心X, footY=セル内の足底Y
+const F_AOI=[
+  [60,22,123,194,61,193],   [279,22,116,194,58,193],  [501,22,116,194,58,193],
+  [724,22,120,194,60,193],  [943,20,115,198,57,197],  [1154,20,113,198,56,197],
+  [1368,20,114,198,57,197], [1579,22,125,194,62,193],
+  [70,282,100,134,50,133],  [285,282,100,134,50,133], [501,281,138,135,69,134],
+  [697,260,172,170,86,169], [918,258,187,172,93,171], [1130,262,137,168,68,167],
+  [1330,268,187,163,93,162],[1575,260,129,171,64,170],
+  [68,456,127,188,63,187],  [288,456,163,188,81,187], [509,456,88,188,44,187],
+  [727,457,125,187,62,186], [917,472,171,129,85,128], [1156,452,117,181,58,180],
+  [1364,504,124,140,62,139],[1574,530,116,114,58,113],
+  [40,674,168,178,84,177],  [262,687,179,165,89,164], [473,683,169,170,84,169],
+  [713,668,120,185,60,184], [901,666,116,187,58,186], [1085,791,203,68,101,67],
+  [1341,742,151,107,75,106],[1579,702,102,141,51,140],
+];
+const F_RYUJI=[
+  [54,20,127,189,63,188],   [275,20,126,189,63,188],  [503,20,121,189,60,188],
+  [728,21,121,188,60,187],  [939,20,116,189,58,188],  [1144,20,115,186,57,185],
+  [1349,20,131,187,65,186], [1558,20,137,187,68,186],
+  [64,276,106,129,53,128],  [278,276,104,129,52,128], [492,274,145,131,72,130],
+  [686,246,184,171,92,170], [903,250,178,167,89,166], [1081,252,199,165,99,164],
+  [1317,250,202,167,101,166],[1569,248,128,170,64,169],
+  [58,450,107,182,53,181],  [273,452,159,180,79,179], [497,464,99,168,49,167],
+  [721,437,103,162,51,161], [912,445,168,131,84,130], [1143,443,140,167,70,166],
+  [1359,498,124,130,62,129],[1571,514,124,113,62,112],
+  [37,656,159,180,79,179],  [253,682,171,159,85,158], [463,676,162,164,81,163],
+  [705,663,118,181,59,180], [893,664,119,180,59,179], [1084,780,196,71,98,70],
+  [1336,732,163,109,81,108],[1575,697,100,136,50,135],
+];
+const F_BRONT=[
+ [57,19,131,190,65,189],[273,19,145,190,72,189],[499,21,137,188,68,187],[711,22,123,186,61,185],
+ [931,21,110,188,55,187],[1135,22,127,188,63,187],[1349,23,137,187,68,186],[1562,25,145,185,72,184],
+ [55,270,124,137,62,136],[256,285,125,122,62,121],[475,283,213,125,106,124],[702,233,193,182,96,181],
+ [901,245,212,171,106,170],[1119,250,173,166,86,165],[1308,254,207,163,103,162],[1574,247,138,170,69,169],
+ [55,452,137,144,68,143],[265,456,183,140,91,139],[513,451,115,145,57,144],[729,437,147,178,73,177],
+ [917,432,171,154,85,153],[1150,447,136,170,68,169],[1355,458,127,158,63,157],[1572,472,124,143,62,142],
+ [36,640,175,187,87,186],[245,646,186,181,93,180],[457,656,187,170,93,169],[673,671,188,156,94,155],
+ [881,683,188,124,94,123],[1103,770,198,77,99,76],[1336,701,169,127,84,126],[1581,678,131,145,65,144],
+];
+const F_SAYO=[
+ [60,26,129,192,64,191],[287,26,118,192,59,191],[504,27,126,191,63,190],[735,27,126,191,63,190],
+ [951,33,122,185,61,184],[1157,27,124,191,62,190],[1380,27,118,191,59,190],[1594,29,128,189,64,188],
+ [68,288,94,128,47,127],[283,295,91,122,45,121],[506,308,169,114,84,113],[732,311,184,111,92,110],
+ [940,260,151,162,75,161],[1156,260,157,162,78,161],[1355,252,146,175,73,174],[1576,252,144,175,72,174],
+ [75,460,86,186,43,185],[260,461,124,185,62,184],[522,459,72,187,36,186],[704,473,117,107,58,106],
+ [918,483,174,94,87,93],[1109,531,160,108,80,107],[1379,486,111,155,55,154],[1581,487,110,154,55,153],
+ [50,697,142,155,71,154],[233,701,171,151,85,150],[460,697,158,155,79,154],[662,706,173,121,86,120],
+ [864,778,180,74,90,73],[1109,786,196,63,98,62],[1357,743,144,99,72,98],[1588,730,93,116,46,115],
+];
+const F_GOUMA=[
+ [67,20,133,191,66,190],[276,20,139,191,69,190],[486,20,133,190,66,189],[719,20,126,191,63,190],
+ [942,20,115,193,57,192],[1153,20,108,192,54,191],[1356,20,196,192,98,191],[1552,20,137,191,68,190],
+ [69,290,113,133,56,132],[270,289,114,131,57,130],[482,312,183,108,91,107],[665,255,219,173,109,172],
+ [898,256,210,187,105,186],[1108,256,222,187,111,186],[1330,255,202,174,101,173],[1583,271,164,61,82,60],
+ [51,465,128,183,64,182],[252,466,185,181,92,180],[490,493,145,60,72,59],[717,462,170,195,85,194],
+ [887,443,221,214,110,213],[1108,443,182,196,91,195],[1358,471,194,176,97,175],[1552,472,90,193,45,192],
+ [46,683,175,179,87,178],[221,706,219,151,109,150],[452,690,213,167,106,166],[665,688,222,163,111,162],
+ [887,802,213,56,106,55],[1174,746,137,112,68,111],[1361,733,191,132,95,131],[1552,665,111,200,55,199],
+];
+
+// ================= フレームロール（state→フレーム番号） =================
+// 旧2キャラ（手動計測シート）のレイアウト
+const ROLES_AOI={ idle:[0,1], walk:[2,3,4,5], crouch:8, gStand:21, gCrouch:23,
+  lp:[11,12], clp:10, hk:[18,19], sweep:22, fb:[13,14], dp:13, rush:14,
+  jump:16, jkick:[17,20], hit:[24,25], fall:[25,26], down:29, getup:[30,31], win:7 };
+const ROLES_RYUJI={ ...ROLES_AOI, hk:[18,17] };
+// 生成3キャラ（story-draft.js FRAME_ROLES 準拠）のレイアウト
+const ROLES_GEN={ idle:[0,1,2], walk:[3,4,5,6], crouch:8, gStand:22, gCrouch:23,
+  lp:[12,13], clp:10, hk:[14,15], sweep:11, fb:[16,17], dp:18, rush:17,
+  jump:20, jkick:[21,21], hit:[24,25], fall:[26,27], down:29, getup:[30,30], win:31 };
+const ROLES_GOUMA={ idle:[0,1], walk:[3,4,5], crouch:8, gStand:12, gCrouch:9,
+  lp:[11,13], clp:10, hk:[11,13], sweep:10, fb:[16,14], dp:23, rush:17,
+  jump:19, jkick:[19,19], hit:[24,25], fall:[26,26], down:28, getup:[30,30], win:31 };
+// kensei/prism の1536x1024生成シートは ROLES_GEN とレイアウトが異なるため専用マップを使う。
+// ケンセイ実レイアウト: row3=波動(16,17) 火球絵のみ(18) 構え(19) 昇龍(20) 旋風脚(21,22) 上段蹴り(23)
+const ROLES_KENSEI={ idle:[0,1,2], walk:[3,4,5,6], crouch:8, gStand:19, gCrouch:9,
+  lp:[11,12], clp:9, hk:[13,15], sweep:10, fb:[16,17], dp:20, rush:21,
+  jump:20, jkick:[22,23], hit:[24,24], fall:[25,26], down:28, getup:[30,30], win:31 };
+// プリズム実レイアウト: row3=構え(16,17) 細ビーム発射(18) 立ち(19) ボディ(20) ビーム発射(21) ビーム絵のみ(22,23)
+// row4=上段蹴り(24) 膝(25) 浮かされ(26) 落下(27) ダウン(28,29) 起き(30) 勝利(31)
+// 18/21〜23 はキャラ不在 or ビーム合成セルなので使わない（dp/ガード等は追加シートを prismExtra で使用）
+const ROLES_PRISM={ idle:[0,1,2], walk:[3,4,5,6], crouch:8, gStand:16, gCrouch:9,
+  lp:[11,12], clp:10, hk:[12,13], sweep:10, fb:[15,17], dp:24, rush:25,
+  jump:24, jkick:[24,24], hit:[26,26], fall:[26,27], down:28, getup:[30,30], win:31,
+  beam:[15,20] };   // 巨大ビーム超必: 溜め=チャージ(15) / 発射=前方ストライク(20)。
+                    // 追加シートの30/31はビーム爆発が主体でキャラが見えないため使わない
+
+// プリズムガード追加モーションシート（char-prism-guard-extra.png / 8x4 / story-draft.js PRISM_GUARD_EXTRA_FRAMES 準拠）
+// セルは固定値ではなく sliceSheetByGrid で image.width/8, image.height/4 から切り出す。
+const EXTRA_PRISM={
+  lowSlideKick:[0,1,2], crouchBeamSweep:[3,4,5,6,7], closeKnee:[8,9],
+  longSideKick:[10,11,12], risingBoot:[13,14,15], guardRecoil:[16,17],
+  airHitRecoil:[18,19,20], upsideDownFlipFall:[21,22,23], wallBounceHurt:[24,25],
+  hardKnockdownBounce:[26,27], getupRecovery:[28,29], superBeamBrace:30, superBeamRecoil:31
+};
+
+// ================= キャラクター定義 =================
+const CHARS={
+  ryuji:{ id:'ryuji', name:'リュウジ', title:'港町の拳', img:'ryuji', frames:F_RYUJI, scale:0.65, roles:ROLES_RYUJI, voice:'ryuji',
+    sp:{ fb:{type:'proj', name:'烈火弾', spd:6.2, dmg:10, r:20},
+         dp:{name:'牙昇拳', dmg:16, vy:-13.5},
+         tatsu:{type:'rush', name:'旋風脚', spd:7.5, dmg:12, dur:22},
+         sup:{type:'proj', name:'嵐砕波', spd:9.5, dmg:30, r:30} }},
+  aoi:{ id:'aoi', name:'アオイ', title:'奪われたリング', img:'aoi', frames:F_AOI, scale:0.65, roles:ROLES_AOI, voice:'aoi',
+    sp:{ fb:{type:'proj', name:'弧月針', spd:7.6, dmg:9, r:14, life:40},
+         dp:{name:'天砕踵', dmg:15, vy:-14.5},
+         tatsu:{type:'rush', name:'螺旋穿ち', spd:10, dmg:13, dur:18, low:true},
+         sup:{type:'rush', name:'流星連脚', spd:11, dmg:32, dur:20} }},
+  bront:{ id:'bront', name:'ブロント', title:'鉄屑街の怪腕', img:'bront', frames:F_BRONT, scale:0.72, roles:ROLES_GEN, voice:'bront',
+    sp:{ fb:{type:'rush', name:'アイアンショルダー', spd:8.5, dmg:14, dur:20},
+         dp:{name:'クレーンキャッチ', dmg:18, vy:-10, airGrab:true},
+         cmdGrab:{name:'ブレイカークラッチ', dmg:22, range:62},
+         supGrab:{name:'スクラップサイクロン', dmg:34, range:66},
+         sup:{type:'rush', name:'スクラップサイクロン', spd:9.5, dmg:30, dur:22} }},
+  sayo:{ id:'sayo', name:'サヨ', title:'夜路地の影足', img:'sayo', frames:F_SAYO, scale:0.62, roles:ROLES_GEN, voice:'sayo',
+    sp:{ fb:{type:'rush', name:'閃影スライド', spd:12, dmg:10, dur:16, low:true},
+         dp:{name:'月影膝', dmg:14, vy:-15.5},
+         tatsu:{type:'move', name:'扇歩', spd:9, dur:10},
+         mash:{name:'百裂掌', dmg:4},
+         sup:{type:'rush', name:'夜霞三連', spd:13, dmg:30, dur:20, low:true} }},
+  gouma:{ id:'gouma', name:'ゴウマ', title:'無敗の実験格闘家', img:'gouma', frames:F_GOUMA, scale:0.70, roles:ROLES_GOUMA, voice:'gouma', boss:true,
+    sp:{ fb:{type:'proj', name:'虚空弾', spd:8.6, dmg:12, r:22, warm:true},
+         airFb:{name:'空虚弾', spd:7, vy:3.4, dmg:10, r:18, warm:true},
+         dp:{name:'紅蓮昇', dmg:20, vy:-14},
+         tatsu:{type:'rush', name:'鬼旋脚', spd:9.5, dmg:14, dur:20, low:true},
+         warpGrab:{name:'零式捕獲', dmg:20, range:60},
+         sup:{type:'proj', name:'殲滅核', spd:11, dmg:38, r:34, warm:true} }},
+  // ケンセイ・ノヴァ: 白道着＋赤グローブのオリジナル。リュウジ系の波動昇龍型（別スキン相当）。
+  // char-kensei-nova.png は 1536x1024 / 8x4 の生成シート → sliceSheetByGrid で切り出し、ROLES_GEN を使用。
+  kenseiNova:{ id:'kenseiNova', name:'ケンセイ・ノヴァ', title:'白道着の閃', img:'kensei', frames:null, scale:0.66, roles:ROLES_KENSEI, voice:'kensei',
+    sp:{ fb:{type:'proj', name:'閃光弾', spd:6.6, dmg:10, r:20},
+         dp:{name:'昇閃拳', dmg:16, vy:-13.5},
+         tatsu:{type:'rush', name:'旋衝脚', spd:7.8, dmg:12, dur:22},
+         sup:{type:'proj', name:'白閃覇', spd:9.5, dmg:30, r:30} }},
+  // プリズムガード: ビーム特化のオリジナルキャラ。横ビーム/対空/連打/足元ビーム/巨大ビーム超必。
+  // base = char-prism-guard.png (1536x1024 / 8x4), extra = char-prism-guard-extra.png (1717x916 / 8x4)。
+  // どちらも sliceSheetByGrid(img, 8, 4) で image.width/8, image.height/4 ごとに切る。
+  prismGuard:{ id:'prismGuard', name:'プリズムガード', title:'光学戦術兵', img:'prism', frames:null, scale:0.66, roles:ROLES_PRISM, voice:'prism',
+    extraImg:'prismx', extraFrames:null, extra:EXTRA_PRISM,
+    sp:{ fb:{type:'proj', name:'プリズムショット', spd:11, dmg:11, r:10, beamThin:true},   // 236P 細い水平ビーム
+         dp:{name:'ライジングプリズム', dmg:15, vy:-13.5},                                   // 623P 対空アッパー
+         tatsu:{type:'rush', name:'サイクロンブーツ', spd:9.5, dmg:13, dur:20},              // 214K 回転蹴り
+         mash:{name:'ラピッドバースト', dmg:4},                                              // P連打 近距離連打
+         opticSweep:{type:'projLow', name:'ロー・レイ', spd:9, dmg:10, r:10, life:80, beamThin:true}, // 236K 足元ビーム
+         airDrop:{name:'フォトンドロップ', dmg:16},                                          // 空中214P 落下打撃
+         sup:{type:'beam', name:'メガ・レイバースト', dmg:34},                               // 236236P 巨大ビーム
+         supAlt:{type:'beam', name:'スーパー・レイバースト', dmg:40, fast:true} }},          // 214214P 発生重視巨大ビーム
+};
+const ROSTER=['ryuji','aoi','bront','sayo','kenseiNova','prismGuard'];
+
+// ================= 通常技（NORMALS統合 / 立ち・屈 × LP/MP/HP/LK/MK/HK） =================
+// [startup, active, rec, dmg, flag]  flag: 'low'下段 / 'lowkd'下段ダウン / 'aa'対空 / 'kd'ダウン
+const NORMALS={
+  ryuji:{ s:{lp:[4,3,7,4],  mp:[6,4,12,7],  hp:[10,4,18,11],     lk:[5,3,9,5],       mk:[8,4,15,8],       hk:[12,5,20,12,'kd']},
+          c:{lp:[4,3,7,4],  mp:[6,4,13,7],  hp:[9,5,20,10,'aa'], lk:[5,3,9,4,'low'],  mk:[7,4,16,7,'low'], hk:[10,5,23,10,'lowkd']} },
+  aoi:{   s:{lp:[4,3,7,4],  mp:[6,4,11,7],  hp:[11,5,18,11],     lk:[5,3,8,5],        mk:[7,4,13,8],       hk:[10,5,18,11,'kd']},
+          c:{lp:[4,3,7,4],  mp:[6,4,12,7],  hp:[8,5,19,9,'aa'],  lk:[5,3,8,4,'low'],  mk:[7,5,17,7,'low'], hk:[9,6,22,10,'lowkd']} },
+  bront:{ s:{lp:[5,3,9,5],  mp:[8,4,15,9],  hp:[13,7,24,14],     lk:[6,3,11,6],       mk:[9,5,17,9],       hk:[14,6,26,13,'kd']},
+          c:{lp:[5,3,9,5],  mp:[8,4,15,8],  hp:[10,6,23,12,'aa'],lk:[6,3,10,5,'low'], mk:[9,5,18,8,'low'], hk:[12,7,28,12,'lowkd']} },
+  sayo:{  s:{lp:[4,3,7,4],  mp:[6,4,12,7],  hp:[10,5,18,10],     lk:[5,3,8,4],        mk:[7,4,14,8],       hk:[12,6,21,12,'kd']},
+          c:{lp:[4,3,7,4],  mp:[6,4,12,7],  hp:[8,5,19,9,'aa'],  lk:[5,3,8,4,'low'],  mk:[7,4,16,7,'low'], hk:[10,6,23,10,'lowkd']} },
+  gouma:{ s:{lp:[4,3,7,5],  mp:[6,4,11,8],  hp:[10,5,17,12],     lk:[5,3,8,5],        mk:[7,4,15,9],       hk:[12,6,22,13,'kd']},
+          c:{lp:[4,3,7,5],  mp:[6,4,12,8],  hp:[8,5,19,11,'aa'], lk:[5,3,8,5,'low'],  mk:[7,4,15,8,'low'], hk:[10,6,23,11,'lowkd']} },
+  kenseiNova:{ s:{lp:[4,3,7,4],  mp:[6,4,12,7],  hp:[10,4,18,11],     lk:[5,3,9,5],       mk:[8,4,15,8],       hk:[12,5,20,12,'kd']},
+               c:{lp:[4,3,7,4],  mp:[6,4,13,7],  hp:[9,5,20,10,'aa'], lk:[5,3,9,4,'low'],  mk:[7,4,16,7,'low'], hk:[10,5,23,10,'lowkd']} },
+  prismGuard:{ s:{lp:[4,3,7,4],  mp:[6,4,12,7],  hp:[10,5,18,11],     lk:[5,3,8,4],       mk:[8,4,15,8],       hk:[12,5,21,12,'kd']},
+               c:{lp:[4,3,7,4],  mp:[6,4,13,7],  hp:[8,5,19,9,'aa'],  lk:[5,3,8,4,'low'],  mk:[7,4,16,7,'low'], hk:[10,6,23,10,'lowkd']} },
+};
+// NORMALSデータ → 攻撃定義テーブル（キー: s_lp / c_hk 等）
+function makeAtkTable(nrm){
+  const T={};
+  for(const pose of ['s','c']){
+    for(const [btnStr,arr] of Object.entries(nrm[pose])){
+      const [su,ac,rec,dmg,flag]=arr;
+      const btn=btnStr[0]==='l'&&btnStr[1]==='p'?'p':(btnStr[1]==='p'?'p':'k');
+      const str=btnStr[0];   // l/m/h
+      const low=flag==='low'||flag==='lowkd';
+      const kd=flag==='lowkd'||flag==='kd';
+      const aa=flag==='aa';
+      const reach=(btn==='k'?54:42)+(str==='m'?10:str==='h'?22:0);
+      let box;
+      if(pose==='c'){
+        box= aa ? {x:4,y:-120,w:40,h:48}
+            : low ? {x:14,y:-20,w:reach+8,h:16}
+            : {x:18,y:-54,w:reach,h:16};
+      }else{
+        box={x:18,y:btn==='k'?-72:-86,w:reach,h:18};
+      }
+      T[pose+'_'+btnStr]={startup:su,active:ac,rec:rec,dmg:dmg,
+        push:4+(dmg/3|0),kd:kd,crouch:pose==='c',heavy:str==='h',
+        box:box,btn:btn,str:str};
+    }
+  }
+  return T;
+}
+for(const k in CHARS) CHARS[k].atk=makeAtkTable(NORMALS[k]);
+
+// ================= ステージ定義 =================
+// idはIMGSのキーと一致。背景は drawBG() が IMGS[game.stage] を 0,0,W,H で描く既存方式のまま。
+const STAGES={
+  harbor:  {name:'Harbor'},
+  neon:    {name:'Neon Alley'},
+  subway:  {name:'Subway Platform'},
+  tropical:{name:'Tropical Harbor'},
+  temple:  {name:'Mountain Temple'},
+  helipad: {name:'Rooftop Helipad'},
+  rainy:   {name:'Rainy Neon Alley'},
+};
+const STAGE_IDS=Object.keys(STAGES);
+
+// ================= ストーリーデータ（story-draft.js 統合） =================
+const OPPONENTS={
+  alleyGuard:   {char:'bront', name:'路地の用心棒',  stage:'neon',   intro:'ここから先は招待客だけだ。拳で通行証を見せな。'},
+  harborHunter: {char:'sayo',  name:'港の賞金稼ぎ',  stage:'harbor', intro:'探し物があるなら、まず私を黙らせてからにしな。'},
+  ryujiRival:   {char:'ryuji', name:'港町の拳',      stage:'harbor', intro:'その目、本気だな。なら遠慮はいらない。'},
+  aoiRival:     {char:'aoi',   name:'奪われたリング',stage:'neon',   intro:'あんたも財団を追ってるの？ なら、まず実力を見せて。'},
+  exTrainer:    {char:'bront', name:'元トレーナー',  stage:'neon',   intro:'勝つだけじゃ何も変わらない。だが負ければ全て終わる。'},
+  silentWitness:{char:'sayo',  name:'沈黙の目撃者',  stage:'neon',   intro:'財団の名前を口にしたね。聞かなかったことにはできない。'},
+  brontEnforcer:{char:'bront', name:'財団の重装回収屋',stage:'neon', intro:'逃げた兵器は回収する。それが俺の契約だ。'},
+  gouma:        {char:'gouma', name:'ゴウマ',        stage:'neon',   intro:'最終戦闘データを取得する。敗北は許可されていない。'},
+};
+const STORIES={
+  ryuji:{ title:'消えた兄の影',
+    intro:'リュウジは失踪した兄の手がかりを追い、非公式格闘大会 STREET VEIN に踏み込む。',
+    route:['alleyGuard','harborHunter','aoiRival','silentWitness','gouma'],
+    ending:'兄は戻らない。それでもリュウジは拳を握り、財団の奥へ進む。' },
+  aoi:{ title:'奪われたリング',
+    intro:'アオイは潰されたジムの名誉を取り戻すため、クロガネ財団の大会に挑む。',
+    route:['alleyGuard','harborHunter','ryujiRival','exTrainer','gouma'],
+    ending:'アオイは財団のデータを奪い、仲間たちの名前を背負って次の戦いへ向かう。' },
+  bront:{ title:'鉄屑街の怪腕',
+    intro:'ブロントは借金の帳消しを条件に大会の用心棒をしていた。だが財団の人体実験を知り、契約を破る。',
+    route:['ryujiRival','aoiRival','harborHunter','silentWitness','gouma'],
+    ending:'ブロントは賞金を捨て、鉄屑街へ帰る。守るべき場所は、リングの外にもある。' },
+  sayo:{ title:'夜路地の影足',
+    intro:'サヨは財団の密輸現場を目撃した唯一の証人。追われる側から、狩る側へ回るため大会へ潜入する。',
+    route:['alleyGuard','aoiRival','ryujiRival','exTrainer','gouma'],
+    ending:'サヨの記録映像は街中へ流れた。沈黙していた夜が、ついに財団の名を叫び始める。' },
+  kenseiNova:{ title:'白道着の継承',
+    intro:'ケンセイ・ノヴァは消えた師の道場印を追って、地下格闘大会へ降りていく。',
+    route:['alleyGuard','harborHunter','aoiRival','silentWitness','gouma'],
+    ending:'白い道着は朝日に染まった。ケンセイは師の拳が確かに受け継がれたことを知る。' },
+  prismGuard:{ title:'光に背く兵士',
+    intro:'プリズムガードは財団の光学兵器計画から逃げ出した。自分の力が誰のものでもないと証明するため、戦場へ戻る。',
+    route:['silentWitness','aoiRival','brontEnforcer','ryujiRival','gouma'],
+    ending:'巨大な光は研究施設の夜を裂いた。プリズムガードはヘッドギアを外し、初めて自分の目で朝を見る。' },
+};
+
+function getFrameIdx(f){
+  const R=f.chr.roles, t=f.t, fr=f.frame;
+  switch(f.state){
+    case 'idle': return R.idle[Math.floor(fr/24)%R.idle.length];
+    case 'walk': return R.walk[Math.floor(fr/6)%R.walk.length];
+    case 'crouch': case 'dpland': return R.crouch;
+    case 'block': return f.crouchHeld?R.gCrouch:R.gStand;
+    case 'atk':{
+      const a=f.atk;
+      if(!a) return R.idle[0];
+      if(a.mash) return (t>>2)%2 ? R.lp[1] : R.lp[0];   // 百裂掌
+      if(a.crouch) return a.btn==='k' ? R.sweep : R.clp;
+      const pair = a.btn==='k' ? R.hk : R.lp;
+      return t<a.startup ? pair[0] : pair[1];
+    }
+    case 'fb':    return t<8?R.fb[0]:R.fb[1];
+    case 'beam':{ const b=R.beam||[R.fb[0],R.hk[1]]; return t<f.beamWind ? b[0] : b[1]; }
+    case 'dp':    return R.dp;
+    case 'rush':  return R.rush;
+    case 'jump':  return f.airAtk?(f.airAtk.t<5?R.jkick[0]:R.jkick[1]):R.jump;
+    case 'fall':  return t<6?R.fall[0]:R.fall[1];
+    case 'down':  return R.down;
+    case 'getup': return t<9?R.getup[0]:R.getup[1];
+    case 'hit':   return t<4?R.hit[0]:R.hit[1];
+    case 'win':   return R.win;
+    case 'ko_wait': return R.down;
+    default: return R.idle[0];
+  }
+}
+
+// プリズムガード: 追加モーションシートを使う状態なら extraFrames のインデックスを返す（それ以外は null）。
+// story-draft.js PRISM_GUARD_EXTRA_FRAMES の定義（EXTRA_PRISM）をそのまま参照する。
+function prismExtra(f){
+  const c=f.chr, E=c.extra;
+  if(!E || !c.extraFrames) return null;
+  // beam状態は基本シート（ROLES_PRISM.beam）を使用。追加シートの30/31はビーム爆発主体でキャラ不可視のため不使用
+  if(f.state==='dp'){ const a=E.risingBoot; return a[Math.min(a.length-1,(f.t/6)|0)]; } // 13-15: ライジングプリズム
+  if(f.state==='block') return E.guardRecoil[f.crouchHeld?1:0];                          // 16/17: ガード硬直
+  if(f.state==='jump'){
+    if(f.airAtk && f.airAtk.drop){ const a=E.upsideDownFlipFall; return a[(f.airAtk.t>>2)%a.length]; } // 21-23: フォトンドロップ
+    if(f.airAtk){ const a=E.longSideKick; return a[Math.min(a.length-1,(f.airAtk.t/5)|0)]; }           // 10-12: 空中キック
+    const a=E.risingBoot; return f.vy<0 ? a[1] : a[2];                                                  // 上昇/下降
+  }
+  return null;
+}
+
+const IMGS={};
+let assetsLoaded=false;
+
+// スプライトシートを cols×rows のセルに分割し、各セルから [sx,sy,sw,sh,cx,footY] を生成する。
+// 生成シートはポーズがセル境界を縦にはみ出す（頭が上の行へ食い込む）ため、単純なセル内bboxだと
+// 頭が切れる＋隣ポーズの断片を拾ってアンカーがズレる。対策として連結成分ベースで切り出す:
+//  - 探索領域は横=セル厳守（隣接ポーズ混入防止）、縦=上32%/下10%まで拡張（頭・足のはみ出し回収）
+//  - セル内に種を持つ連結成分のうち主要なもの（最大成分の22%以上）だけを採用 → 隣の頭の断片を除外
+//  - cx は bbox中央ではなく「足元（bbox下端15%）の不透明ピクセル重心X」→ 横長エフェクト入りでもズレない
+function sliceSheetByGrid(img, cols, rows){
+  const cw=img.width/cols, ch=img.height/rows;
+  const oc=document.createElement('canvas'); oc.width=img.width; oc.height=img.height;
+  const octx=oc.getContext('2d'); octx.drawImage(img,0,0);
+  let data=null;
+  try{ data=octx.getImageData(0,0,img.width,img.height).data; }catch(e){ data=null; }
+  const W2=img.width, H2=img.height, frames=[];
+  const opaque=(x,y)=> data[(y*W2+x)*4+3]>24;
+  for(let r=0;r<rows;r++){
+    for(let c=0;c<cols;c++){
+      const x0=Math.round(c*cw), y0=Math.round(r*ch);
+      const x1=Math.min(W2-1, Math.round((c+1)*cw)-1);
+      const y1=Math.min(H2-1, Math.round((r+1)*ch)-1);
+      const fallback=[x0,y0,x1-x0+1,y1-y0+1,(x1-x0+1)/2,(y1-y0+1)*0.94];
+      if(!data){ frames.push(fallback); continue; }
+      const yT=Math.max(0, y0-Math.round(ch*0.32));
+      const yB=Math.min(H2-1, y1+Math.round(ch*0.10));
+      const rw=x1-x0+1, rh=yB-yT+1;
+      const lab=new Int32Array(rw*rh).fill(-1);
+      const li=(x,y)=>(y-yT)*rw+(x-x0);
+      // セル内を種に8近傍BFSで連結成分を列挙（縦の拡張域へは伸びてよい）
+      const comps=[]; const stack=[];
+      for(let sy=y0;sy<=y1;sy++)for(let sx=x0;sx<=x1;sx++){
+        if(!opaque(sx,sy) || lab[li(sx,sy)]>=0) continue;
+        const id=comps.length;
+        let n=0, nIn=0, minX=sx,maxX=sx,minY=sy,maxY=sy;
+        lab[li(sx,sy)]=id; stack.length=0; stack.push(sx,sy);
+        while(stack.length){
+          const py=stack.pop(), px=stack.pop();
+          n++;
+          if(py>=y0&&py<=y1) nIn++;   // 元セル内のピクセル数（拡張域の断片を区別する）
+          if(px<minX)minX=px; if(px>maxX)maxX=px;
+          if(py<minY)minY=py; if(py>maxY)maxY=py;
+          for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+            if(!dx&&!dy) continue;
+            const nx=px+dx, ny=py+dy;
+            if(nx<x0||nx>x1||ny<yT||ny>yB) continue;
+            if(!opaque(nx,ny) || lab[li(nx,ny)]>=0) continue;
+            lab[li(nx,ny)]=id; stack.push(nx,ny);
+          }
+        }
+        comps.push({id,n,nIn,minX,maxX,minY,maxY});
+      }
+      if(!comps.length){ frames.push(fallback); continue; }
+      // 採用条件:
+      //  - セル内ピクセルが一定以上（小さな飛沫を除外）
+      //  - 縦の拡張限界に接触していない（接触＝隣の行のスプライトが食い込んだもの。
+      //    自キャラの頭/足は拡張域の途中で終わるので接触しない）
+      const bestN=Math.max(...comps.map(o=>o.nIn));
+      let keep=comps.filter(o=>
+        o.nIn>=Math.max(bestN*0.15,120) && o.maxY<yB-1 && o.minY>yT+1);
+      // 全滅したら（自キャラ自体が限界まで届く特殊ケース）セル内最大成分だけ採用
+      if(!keep.length) keep=[comps.reduce((a,b)=>a.nIn>=b.nIn?a:b)];
+      // 横方向: 最大成分とX範囲が重なる成分だけ残す
+      // （セル幅が非整数のシートで隣の列のポーズが同セルに入り込む対策）
+      const main=keep.reduce((a,b)=>a.nIn>=b.nIn?a:b);
+      keep=keep.filter(o=> o===main || (o.minX<=main.maxX+8 && o.maxX>=main.minX-8));
+      const keepIds=new Set(keep.map(o=>o.id));
+      let minX=W2,maxX=0,minY=H2,maxY=0;
+      for(const o of keep){
+        if(o.minX<minX)minX=o.minX; if(o.maxX>maxX)maxX=o.maxX;
+        if(o.minY<minY)minY=o.minY; if(o.maxY>maxY)maxY=o.maxY;
+      }
+      // bboxが下方拡張の限界まで届いている場合、下の行のスプライト（頭がセルへ食い込み
+      // 本体と連結してしまったもの）を拾っている。セル下端で切り詰めて除外する。
+      if(maxY>=yB-1) maxY=y1;
+      const sw=maxX-minX+1, sh=maxY-minY+1;
+      // 足元重心X
+      const fy0=Math.max(minY, maxY-Math.max(2,Math.round(sh*0.15)));
+      let sum=0,cnt=0;
+      for(let y=fy0;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
+        if(x<x0||x>x1||y<yT||y>yB) continue;
+        const v=lab[li(x,y)];
+        if(v>=0 && keepIds.has(v)){ sum+=x; cnt++; }
+      }
+      const cx=cnt ? (sum/cnt - minX) : sw/2;
+      frames.push([minX, minY, sw, sh, cx, sh]);
+    }
+  }
+  return frames;
+}
+
+function loadAssets(){
+  const defs=[
+    ['aoi','assets/char-aoi.png'],
+    ['ryuji','assets/char-ryuji.png'],
+    ['bront','assets/char-bront.png'],
+    ['sayo','assets/char-sayo.png'],
+    ['gouma','assets/char-gouma.png'],
+    ['kensei','assets/char-kensei-nova.png'],
+    ['prism','assets/char-prism-guard.png'],
+    ['prismx','assets/char-prism-guard-extra.png'],
+    ['harbor','assets/stage-harbor.png'],
+    ['neon','assets/stage-neon.png'],
+    ['subway','game-assets/fighter-subway-stage.png'],
+    ['tropical','game-assets/fighter-tropical-harbor-stage.png'],
+    ['temple','game-assets/fighter-mountain-temple-stage.png'],
+    ['helipad','game-assets/fighter-rooftop-helipad-stage.png'],
+    ['rainy','game-assets/fighter-rainy-neon-stage.png'],
+    ['superfx','game-assets/super-combo-bg-effect-spritesheet-1280x240.png'],
+  ];
+  let n=0;
+  // 失敗してもLoadingで固まらないよう、必ずdone()を呼ぶ
+  const done=()=>{ if(++n>=defs.length) assetsLoaded=true; };
+  for(const [key,src] of defs){
+    const im=new Image();
+    im.onload=()=>{
+      IMGS[key]=im;
+      // 生成シート（8x4）はロード時にセル分割してフレーム配列を作る
+      if(key==='kensei') CHARS.kenseiNova.frames=sliceSheetByGrid(im,8,4);
+      else if(key==='prism') CHARS.prismGuard.frames=sliceSheetByGrid(im,8,4);
+      else if(key==='prismx') CHARS.prismGuard.extraFrames=sliceSheetByGrid(im,8,4);
+      done();
+    };
+    im.onerror=done;
+    im.src=src;
+  }
+}
+
+// ================= サウンド（WebAudio） =================
+let AC=null;
+function audio(){
+  if(!AC){
+    try{AC=new (window.AudioContext||window.webkitAudioContext)();}catch(e){}
+    if(AC) decodeAllSnd();
+  }
+  if(AC && AC.state==='suspended') AC.resume();
+  return AC;
+}
+function beep(f0,f1,dur,type,vol){
+  const ac=audio(); if(!ac) return;
+  const o=ac.createOscillator(), g=ac.createGain();
+  o.type=type||'square';
+  o.frequency.setValueAtTime(f0,ac.currentTime);
+  o.frequency.exponentialRampToValueAtTime(Math.max(20,f1),ac.currentTime+dur);
+  g.gain.setValueAtTime(vol||0.12,ac.currentTime);
+  g.gain.exponentialRampToValueAtTime(0.001,ac.currentTime+dur);
+  o.connect(g); g.connect(ac.destination);
+  o.start(); o.stop(ac.currentTime+dur);
+}
+// ---- 効果音・ボイス（mp3 / 効果音ラボ素材） ----
+const SND={raw:{},buf:{}};
+const SND_FILES={
+  p_light:'assets/sfx/punch-light1.mp3',
+  p_mid:  'assets/sfx/punch-middle2.mp3',
+  p_heavy:'assets/sfx/punch-heavy1.mp3',
+  k_mid:  'assets/sfx/kick-middle1.mp3',
+  k_heavy:'assets/sfx/kick-heavy1.mp3',
+  swing:  'assets/sfx/punch-swing1.mp3',
+  k_swing:'assets/sfx/kick-real-swing1.mp3',
+  guard:  'assets/sfx/punch-stop1.mp3',
+  jump:   'assets/sfx/jump1.mp3',
+  down:   'assets/sfx/down1.mp3',
+  flame:  'assets/sfx/magic-flame1.mp3',
+  flame2: 'assets/sfx/magic-flame2.mp3',
+};
+const VOICE_KINDS=['attack1','attack2','attack3','special1','damage1','damage2','death1','win1','start1'];
+for(const c of ['ryuji','aoi','bront','sayo','gouma','kensei','prism'])
+  for(const k of VOICE_KINDS) SND_FILES['v_'+c+'_'+k]='assets/voice/'+c+'-'+k+'.mp3';
+
+function loadSounds(){
+  for(const [k,url] of Object.entries(SND_FILES)){
+    fetch(url).then(r=>r.ok?r.arrayBuffer():null).then(ab=>{
+      if(!ab) return;
+      SND.raw[k]=ab;
+      if(AC) decodeSnd(k);
+    }).catch(()=>{});
+  }
+}
+function decodeSnd(k){
+  AC.decodeAudioData(SND.raw[k].slice(0)).then(b=>{SND.buf[k]=b;}).catch(()=>{});
+}
+function decodeAllSnd(){
+  for(const k in SND.raw) if(!SND.buf[k]) decodeSnd(k);
+}
+function playSnd(k,vol){
+  if(!AC||!SND.buf[k]) return false;
+  const s=AC.createBufferSource(); s.buffer=SND.buf[k];
+  const g=AC.createGain(); g.gain.value=vol==null?0.8:vol;
+  s.connect(g); g.connect(AC.destination);
+  s.start();
+  return true;
+}
+function pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; }
+
+function voice(f,kind,vol){
+  const vc=f.chr.voice; if(!vc) return;
+  const key = kind==='attack' ? 'v_'+vc+'_'+pick(['attack1','attack2','attack3'])
+            : kind==='damage' ? 'v_'+vc+'_'+pick(['damage1','damage2'])
+            : 'v_'+vc+'_'+kind;
+  playSnd(key, vol==null?0.85:vol);
+}
+
+const SFX={
+  // 命中音は用途定義通りに出し分け: パンチ=punch-*, キック=kick-*, 弱/中/強で別ファイル
+  // （kick-light素材は無いので弱キックは k_mid で代用。btn/str未指定の特殊技・飛び道具はパンチ系で代表）
+  hit:   (btn,str)=>{ const k = btn==='k' ? 'k_mid' : (str==='l'?'p_light':'p_mid');
+                      if(!playSnd(k,0.85)){beep(220,55,0.12,'square',0.14); beep(900,200,0.06,'sawtooth',0.06);} },
+  heavy: (btn)=>{ const k = btn==='k' ? 'k_heavy' : 'p_heavy';
+                  if(!playSnd(k,0.95)){beep(180,40,0.2,'square',0.18); beep(1200,150,0.1,'sawtooth',0.08);} },
+  block: ()=>{ if(!playSnd('guard',0.7)) beep(140,90,0.08,'square',0.10); },
+  fb:    ()=>{ if(!playSnd('flame',0.8)) beep(220,720,0.22,'sine',0.12); },
+  super: ()=>{ if(!playSnd('flame2',0.95)){beep(160,900,0.4,'sawtooth',0.14); beep(80,400,0.4,'sine',0.1);} },
+  dp:    ()=>{ if(!playSnd('k_swing',0.85)) beep(330,990,0.18,'square',0.1); },
+  swing: ()=>{ playSnd(pick(['swing','k_swing']),0.45); },
+  jump:  ()=>{ if(!playSnd('jump',0.5)) beep(300,520,0.08,'sine',0.07); },
+  ko:    ()=>{ if(!playSnd('down',0.95)) beep(440,60,0.8,'sawtooth',0.16); },
+  thud:  ()=>{ if(!playSnd('down',0.7)) beep(90,40,0.15,'square',0.12); },
+  round: ()=>beep(523,659,0.15,'square',0.09),
+  sel:   ()=>beep(660,660,0.05,'square',0.08),
+};
+
+// ================= BGM（ステージ別ループ / MusMus素材） =================
+const BGM={el:null, muted:false, track:null};
+const BGM_TRACKS={
+  harbor:'assets/bgm/harbor.mp3',  // Fateful Encounter
+  neon:  'assets/bgm/neon.mp3',    // Lightning Brain
+  boss:  'assets/bgm/boss.mp3',    // Attack of the Cyborg Legion
+  // 追加ステージは雰囲気の近い既存曲を流用
+  subway:  'assets/bgm/neon.mp3',
+  tropical:'assets/bgm/harbor.mp3',
+  temple:  'assets/bgm/harbor.mp3',
+  helipad: 'assets/bgm/neon.mp3',
+  rainy:   'assets/bgm/neon.mp3',
+};
+function bgmStart(){
+  const track=(p2 && p2.chr.boss) ? 'boss' : game.stage;
+  if(!BGM.el){ BGM.el=new Audio(); BGM.el.loop=true; }
+  if(BGM.track!==track){
+    BGM.el.src=BGM_TRACKS[track]||BGM_TRACKS.harbor;
+    BGM.track=track;
+  }
+  BGM.el.volume=BGM.muted?0:0.45;
+  BGM.el.play().catch(()=>{});
+}
+function bgmStop(){
+  if(BGM.el){ BGM.el.pause(); BGM.el.currentTime=0; }
+}
+
+// ================= 入力 =================
+const keys={}, pressed=new Set();
+const PREVENT=new Set(['arrowup','arrowdown','arrowleft','arrowright',' ']);
+window.addEventListener('keydown',e=>{
+  const k=e.key.toLowerCase();
+  if(PREVENT.has(k)) e.preventDefault();
+  if(!e.repeat) pressed.add(k);
+  keys[k]=true;
+  audio();
+});
+window.addEventListener('keyup',e=>{ keys[e.key.toLowerCase()]=false; });
+window.addEventListener('keydown',e=>{
+  if(e.key.toLowerCase()==='m' && !e.repeat){
+    BGM.muted=!BGM.muted;
+    if(BGM.el) BGM.el.volume=BGM.muted?0:0.45;
+  }
+});
+
+// ================= タッチ操作（スマホ / pointer:coarse 環境で自動表示） =================
+// 仮想スティック→WASD、P/Kボタン→F/G にマップして既存の keys/pressed をそのまま使う。
+// 1P操作のみ対応（2P対戦は物理キーボード前提）。
+function touchEnable(){ document.body.classList.add('touch-on'); }
+if(window.matchMedia && matchMedia('(pointer: coarse)').matches) touchEnable();
+window.addEventListener('touchstart',()=>{ touchEnable(); audio(); },{passive:true});
+
+// keys[]の立ち上がりエッジで pressed にも積む（メニュー操作・ボタン入力の両対応）
+function touchKey(k,v){
+  if(v && !keys[k]) pressed.add(k);
+  keys[k]=v;
+}
+function bindTouchBtn(id,key){
+  const el=document.getElementById(id);
+  el.addEventListener('pointerdown',e=>{
+    e.preventDefault(); audio();
+    try{ el.setPointerCapture(e.pointerId); }catch(err){}
+    if(key==='m'){ BGM.muted=!BGM.muted; if(BGM.el) BGM.el.volume=BGM.muted?0:0.45; return; }
+    touchKey(key,true);
+  });
+  const up=()=>{ if(key!=='m') keys[key]=false; };
+  el.addEventListener('pointerup',up);
+  el.addEventListener('pointercancel',up);
+  el.addEventListener('contextmenu',e=>e.preventDefault());
+}
+bindTouchBtn('btnP','f');
+bindTouchBtn('btnK','g');
+bindTouchBtn('btnStart','enter');
+bindTouchBtn('btnEsc','escape');
+bindTouchBtn('btnBgm','m');
+
+// 仮想スティック: 中心からのオフセットでWASDを設定。斜めも入るので236/623/214コマンド入力可。
+(function(){
+  const base=document.getElementById('stick'), nub=document.getElementById('nub');
+  let pid=null;
+  function apply(dx,dy){
+    const t=Math.max(12,base.clientWidth*0.14);   // 遊び（デッドゾーン）
+    touchKey('a',dx<-t); touchKey('d',dx>t);
+    touchKey('w',dy<-t); touchKey('s',dy>t);
+  }
+  function move(e){
+    const r=base.getBoundingClientRect();
+    const dx=e.clientX-(r.left+r.width/2), dy=e.clientY-(r.top+r.height/2);
+    const m=r.width*0.30, len=Math.hypot(dx,dy)||1, c=Math.min(1,m/len);
+    nub.style.transform='translate(calc(-50% + '+(dx*c)+'px), calc(-50% + '+(dy*c)+'px))';
+    apply(dx,dy);
+  }
+  base.addEventListener('pointerdown',e=>{
+    e.preventDefault(); audio();
+    pid=e.pointerId;
+    try{ base.setPointerCapture(pid); }catch(err){}
+    move(e);
+  });
+  base.addEventListener('pointermove',e=>{ if(e.pointerId===pid) move(e); });
+  function end(e){
+    if(e.pointerId!==pid) return;
+    pid=null;
+    keys['a']=keys['d']=keys['w']=keys['s']=false;
+    nub.style.transform='translate(-50%,-50%)';
+  }
+  base.addEventListener('pointerup',end);
+  base.addEventListener('pointercancel',end);
+  base.addEventListener('contextmenu',e=>e.preventDefault());
+})();
+
+const MAP1={left:'a',right:'d',up:'w',down:'s',punch:'f',kick:'g'};
+const MAP2={left:'arrowleft',right:'arrowright',up:'arrowup',down:'arrowdown',punch:'k',kick:'l'};
+function humanInput(map){
+  return {
+    left:!!keys[map.left], right:!!keys[map.right], up:!!keys[map.up], down:!!keys[map.down],
+    punch:pressed.has(map.punch), kick:pressed.has(map.kick), cmd:null
+  };
+}
+const EMPTY_INP={left:false,right:false,up:false,down:false,punch:false,kick:false,cmd:null};
+
+// ================= 技データ =================
+// 通常技はキャラ別生成テーブル CHARS[k].atk を使用（makeAtkTable参照）
+// 百裂掌（サヨ）用の連打技定義
+const MASH_ATK={startup:4, active:26, rec:10, dmg:4, push:3, kd:false, crouch:false, heavy:false,
+  box:{x:18,y:-86,w:50,h:20}, btn:'p', str:'l', mash:true};
+
+// ================= パーティクル =================
+let particles=[];
+function spark(x,y,col,n){
+  for(let i=0;i<(n||8);i++){
+    particles.push({x,y,vx:(Math.random()-0.5)*8,vy:(Math.random()-0.5)*8-1,life:10+Math.random()*8,col});
+  }
+}
+function updParticles(){
+  for(const p of particles){ p.x+=p.vx; p.y+=p.vy; p.vy+=0.25; p.life--; }
+  particles=particles.filter(p=>p.life>0);
+}
+
+// ================= 飛び道具 =================
+let projectiles=[];
+function spawnProj(owner,sup){
+  const cfg=sup?owner.chr.sp.sup:owner.chr.sp.fb;
+  projectiles.push({
+    x:owner.x+owner.facing*44, y:owner.y-72,
+    vx:owner.facing*cfg.spd, owner, sup, dead:false, t:0,
+    dmg:cfg.dmg, r:cfg.r||20, warm:!!cfg.warm, life:cfg.life||9999, beamThin:!!cfg.beamThin
+  });
+}
+
+// ================= ファイター =================
+class Fighter{
+  constructor(idx,chr,opts){
+    this.idx=idx; this.chr=chr; this.name=chr.name;
+    this.tint=null;
+    if(opts&&opts.shadow){ this.tint='brightness(0.4) saturate(50%)'; this.name='影・'+chr.name; }
+    this.reset(0,1);
+  }
+  reset(x,facing){
+    this.x=x; this.y=GROUND; this.vx=0; this.vy=0; this.facing=facing;
+    this.hp=100; this.meter=0;
+    this.state='idle'; this.t=0; this.stun=0; this.frame=0;
+    this.atkName=null; this.atk=null; this.hitConsumed=true;
+    this.airAtk=null; this.fbSpawned=false; this.fbSuper=false; this.rushCfg=null;
+    this.flashT=0; this.lastDir=5; this.hist=[];
+    this.inpBack=false; this.crouchHeld=false;
+    this.aiT=0; this.aiPlan='idle'; this.aiNew=false;
+    this.bufP=0; this.bufK=0;
+    this.pTimes=[]; this.airFb=false; this.tpCd=0; this.tpT=0;
+    // プリズムガード用: 巨大ビーム超必 / 足元ビーム
+    this.beamCfg=null; this.beamWind=0; this.beamActive=0; this.beamRec=0; this.fbOptic=false;
+  }
+  grounded(){ return this.y>=GROUND-0.5 && this.state!=='jump' && this.state!=='fall'; }
+  canAct(){ return ['idle','walk','crouch'].includes(this.state); }
+  invul(){
+    if(this.state==='getup') return true;
+    if(this.state==='down') return true;
+    if(this.state==='dp' && this.t<8) return true;
+    return false;
+  }
+  hurtbox(){
+    if(this.state==='down'||this.state==='getup') return {x:this.x-30,y:this.y-22,w:60,h:22};
+    if(this.state==='rush'&&this.rushCfg&&this.rushCfg.low) return {x:this.x-26,y:this.y-46,w:52,h:46};
+    if(this.state==='jump'||this.state==='fall'||this.state==='dp') return {x:this.x-20,y:this.y-96,w:40,h:74};
+    let h=100;
+    if(this.state==='crouch'||this.state==='dpland') h=66;
+    if(this.state==='atk'&&this.atk&&this.atk.crouch) h=66;
+    if(this.state==='block'&&this.crouchHeld) h=66;
+    return {x:this.x-22,y:this.y-h,w:44,h:h};
+  }
+  worldBox(b){
+    return { x: this.facing===1 ? this.x+b.x : this.x-b.x-b.w, y:this.y+b.y, w:b.w, h:b.h };
+  }
+  activeHitbox(){
+    if(this.hitConsumed) return null;
+    if(this.state==='atk'&&this.atk){
+      const a=this.atk;
+      if(this.t>=a.startup && this.t<a.startup+a.active) return this.worldBox(a.box);
+    }
+    if(this.state==='dp' && this.t>=3 && this.t<=16) return this.worldBox({x:-4,y:-134,w:44,h:84});
+    if(this.state==='rush' && this.rushCfg && this.t>=3 && this.t<=18){
+      const low=this.rushCfg.low;
+      return this.worldBox({x:4,y:low?-40:-86,w:54,h:low?36:56});
+    }
+    if(this.state==='jump' && this.airAtk){
+      const at=this.airAtk.t;
+      if(this.airAtk.drop){ if(at>=2 && at<=26) return this.worldBox({x:-10,y:-54,w:62,h:72}); }   // フォトンドロップ
+      else if(at>=4 && at<=20) return this.worldBox({x:8,y:-62,w:46,h:28});
+    }
+    // 巨大ビーム超必: 発射中は画面前方を横断する太い帯（多段）
+    if(this.state==='beam' && this.beamCfg){
+      const w=this.beamWind, a=this.beamActive;
+      if(this.t>w && this.t<=w+a) return this.worldBox({x:10,y:-104,w:W,h:64});
+    }
+    return null;
+  }
+  curAtkInfo(){
+    if(this.state==='atk'&&this.atk) return {dmg:this.atk.dmg, kd:this.atk.kd, heavy:this.atk.heavy, special:false, push:this.atk.push, btn:this.atk.btn, str:this.atk.str};
+    if(this.state==='dp') return {dmg:this.chr.sp.dp.dmg, kd:true, heavy:true, special:true, push:8};
+    if(this.state==='rush'&&this.rushCfg) return {dmg:this.rushCfg.dmg, kd:true, heavy:true, special:true, push:9};
+    if(this.state==='beam'&&this.beamCfg){
+      const hits=Math.max(3,(this.beamActive/4)|0);
+      return {dmg:Math.max(3,Math.round(this.beamCfg.dmg/hits)), kd:false, heavy:true, special:true, push:2};
+    }
+    if(this.state==='jump'&&this.airAtk&&this.airAtk.drop) return {dmg:this.chr.sp.airDrop.dmg, kd:true, heavy:true, special:true, push:7};
+    if(this.state==='jump'&&this.airAtk) return {dmg:11, kd:false, heavy:true, special:false, push:7};
+    return {dmg:5,kd:false,heavy:false,special:false,push:4};
+  }
+  pushDir(inp){
+    let col=(inp.right?1:0)-(inp.left?1:0);
+    if(this.facing<0) col=-col;
+    const row= inp.down?-1:(inp.up?1:0);
+    const d=5+col+row*3;
+    if(d!==this.lastDir){
+      this.hist.push({d,t:performance.now()});
+      this.lastDir=d;
+      if(this.hist.length>24) this.hist.shift();
+    }
+  }
+  checkSeq(seq){
+    const now=performance.now(); let i=0;
+    for(const h of this.hist){
+      if(now-h.t>450) continue;
+      if(h.d===seq[i]) i++;
+      if(i>=seq.length) return true;
+    }
+    return false;
+  }
+  startAttack(name){
+    this.atkName=name;
+    this.atk = name==='mash' ? MASH_ATK : this.chr.atk[name];
+    if(!this.atk){ this.atk=this.chr.atk.s_lp; this.atkName='s_lp'; }
+    this.state='atk'; this.t=0; this.hitConsumed=false;
+    SFX.swing();
+    if(Math.random()<0.3) voice(this,'attack',0.7);
+  }
+  // ---- 投げ ----
+  throwable(opp){
+    return opp.grounded() && ['idle','walk','crouch','block','atk'].includes(opp.state);
+  }
+  doThrow(opp,dmg,vName,sup){
+    const dir=(opp.x>=this.x)?1:-1;
+    game.lastHitSuper=!!sup;
+    game.hitstop=9; game.shake=8;
+    SFX.heavy(); voice(this,vName||'attack',0.9);
+    spark(opp.x,opp.y-60,'#ffd24a',12);
+    opp.hp=Math.max(0,opp.hp-dmg);
+    opp.flashT=4; opp.airAtk=null;
+    if(opp.hp<=0) voice(opp,'death1',0.95); else voice(opp,'damage',0.8);
+    opp.state='fall'; opp.t=0; opp.vy=-8.5; opp.vx=dir*4.4;
+    this.meter=Math.min(100,this.meter+10);
+    game.score[this.idx]+=dmg*105;
+    this.state='atk'; this.startAttack('s_hp'); this.t=this.atk.startup; this.hitConsumed=true;
+    checkKO();
+  }
+  // ブロント: コマ投げ / 超必投げ（63214P）
+  cmdGrab(opp){
+    const cfg=(this.meter>=100 && this.chr.sp.supGrab)?this.chr.sp.supGrab:this.chr.sp.cmdGrab;
+    if(!cfg) return false;
+    const sup=(cfg===this.chr.sp.supGrab);
+    if(Math.abs(opp.x-this.x)<=cfg.range && this.throwable(opp)){
+      if(sup){ this.meter=0; game.flash=14; SFX.super(); }
+      this.doThrow(opp,cfg.dmg,'special1',sup);
+    }else{
+      this.startAttack('s_hp'); // 空振り
+    }
+    return true;
+  }
+  // 214K系（旋風脚/螺旋穿ち/扇歩/鬼旋脚）
+  specialTatsu(){
+    const cfg=this.chr.sp.tatsu;
+    if(!cfg) return false;
+    if(cfg.type==='move'){
+      // 扇歩: 高速前ステップ（攻撃判定なし）
+      this.state='rush'; this.t=0; this.hitConsumed=true;
+      this.rushCfg={spd:cfg.spd,dur:cfg.dur,dmg:0,move:true};
+      this.vx=this.facing*cfg.spd;
+      SFX.jump();
+    }else{
+      this.state='rush'; this.t=0; this.hitConsumed=false;
+      this.rushCfg=cfg; this.vx=this.facing*cfg.spd;
+      SFX.dp(); voice(this,'attack',0.85);
+    }
+    return true;
+  }
+  // 巨大ビーム超必（プリズムガード: 236236P=メガ / 214214P=スーパー）
+  specialBeam(alt){
+    const cfg= alt ? this.chr.sp.supAlt : this.chr.sp.sup;
+    if(!cfg || this.meter<100) return false;
+    this.meter=0; game.flash=14; SFX.super(); voice(this,'special1',0.95);
+    this.state='beam'; this.t=0; this.hitConsumed=true;
+    this.beamCfg={dmg:cfg.dmg, name:cfg.name, fast:!!cfg.fast};
+    this.beamWind = cfg.fast?6:14; this.beamActive=18; this.beamRec=16;
+    return true;
+  }
+  // 足元ビーム（プリズムガード: 236K / 低い水平弾を地面付近に発射）
+  specialOptic(){
+    const c=this.chr.sp.opticSweep; if(!c) return false;
+    if(projectiles.some(pr=>pr.owner===this&&!pr.dead&&pr.low)) return true;
+    this.state='fb'; this.t=0; this.fbSpawned=false; this.fbSuper=false; this.fbOptic=true;
+    SFX.fb(); voice(this,'attack',0.8);
+    return true;
+  }
+  specialFB(sup){
+    const cfg=sup?this.chr.sp.sup:this.chr.sp.fb;
+    if(sup && this.meter<100) return;
+    if(sup && cfg.type==='beam'){ this.specialBeam(false); return; }  // ビーム超必へ委譲
+    if(cfg.type==='proj' && projectiles.some(pr=>pr.owner===this&&!pr.dead)) return;
+    if(sup){ this.meter=0; game.flash=14; SFX.super(); voice(this,'special1',0.95); }
+    else if(cfg.type==='proj'){ SFX.fb(); voice(this,'attack',0.85); }
+    else { SFX.dp(); voice(this,'attack',0.85); }
+    if(cfg.type==='proj'){
+      this.state='fb'; this.t=0; this.fbSpawned=false; this.fbSuper=!!sup;
+    }else{
+      this.state='rush'; this.t=0; this.hitConsumed=false;
+      this.rushCfg=cfg; this.vx=this.facing*cfg.spd;
+    }
+  }
+  specialDP(){
+    const d=this.chr.sp.dp;
+    if(d.airGrab){
+      // ブロント: クレーンキャッチ（対空投げ）
+      const opp=(this===p1)?p2:p1;
+      if((opp.state==='jump'||opp.state==='fall'||opp.y<GROUND-10) && Math.abs(opp.x-this.x)<84){
+        voice(this,'special1',0.9);
+        this.doThrow(opp,d.dmg,'special1');
+        return;
+      }
+    }
+    this.state='dp'; this.t=0; this.vy=d.vy; this.hitConsumed=false; SFX.dp();
+    voice(this,'special1',0.9);
+  }
+  takeHit(dmg,dir,kd){
+    this.hp=Math.max(0,this.hp-dmg);
+    this.flashT=5;
+    this.meter=Math.min(100,this.meter+8);
+    if(this.hp<=0){ kd=true; voice(this,'death1',0.95); }
+    else voice(this,'damage',0.75);
+    this.airAtk=null;
+    if(kd || this.state==='jump' || this.y<GROUND-1){
+      this.state='fall'; this.t=0; this.vy=-9; this.vx=dir*3.4;
+    }else{
+      this.state='hit'; this.stun=(dmg>=12?24:16); this.vx=dir*4.5;
+    }
+  }
+  enterBlock(stun,chip,dir,crouching){
+    this.state='block'; this.stun=stun; this.vx=dir*3; this.crouchHeld=crouching;
+    this.meter=Math.min(100,this.meter+4);
+    if(chip>0){ this.hp=Math.max(0,this.hp-chip); this.flashT=3; }
+  }
+  update(inp,opp){
+    this.frame++;
+    if(this.flashT>0) this.flashT--;
+    // 先行入力バッファ（硬直明けに技が出る）
+    if(inp.punch) this.bufP=8; else if(this.bufP>0) this.bufP--;
+    if(inp.kick)  this.bufK=8; else if(this.bufK>0) this.bufK--;
+    // 向き（行動可能時のみ）
+    if(this.canAct()){
+      const nf=(opp.x>=this.x)?1:-1;
+      this.facing=nf;
+    }
+    this.inpBack = (opp.x>this.x ? inp.left : inp.right);
+    if(this.grounded()) this.pushDir(inp);
+
+    switch(this.state){
+      case 'hit':
+        this.x+=this.vx; this.vx*=0.82;
+        if(--this.stun<=0) this.state='idle';
+        break;
+      case 'block':
+        this.x+=this.vx; this.vx*=0.8;
+        if(--this.stun<=0) this.state='idle';
+        break;
+      case 'fall':
+        this.x+=this.vx; this.y+=this.vy; this.vy+=0.7;
+        if(this.y>=GROUND){ this.y=GROUND; this.vy=0; this.vx=0; this.state='down'; this.t=50; SFX.thud(); spark(this.x,this.y-6,'#caa',6); }
+        break;
+      case 'down':
+        this.t--;
+        if(this.t<=0 && this.hp>0 && game.state==='fight'){ this.state='getup'; this.t=18; }
+        break;
+      case 'getup':
+        if(--this.t<=0) this.state='idle';
+        break;
+      case 'dpland':
+        if(--this.t<=0) this.state='idle';
+        break;
+      case 'dp':
+        this.t++;
+        this.y+=this.vy; this.vy+=0.78;
+        this.x+=this.facing*2.2;
+        if(this.y>=GROUND && this.t>6){ this.y=GROUND; this.vy=0; this.state='dpland'; this.t=22; }
+        break;
+      case 'fb':
+        this.t++;
+        if(this.t===8 && !this.fbSpawned){
+          this.fbSpawned=true;
+          if(this.fbOptic){
+            // 足元ビーム: 地面付近を走る低い水平弾
+            const c=this.chr.sp.opticSweep;
+            projectiles.push({x:this.x+this.facing*40, y:GROUND-14, vx:this.facing*c.spd,
+              owner:this, sup:false, dead:false, t:0, dmg:c.dmg, r:c.r||10, warm:false,
+              low:true, beamThin:true, life:c.life||80});
+            this.fbOptic=false;
+          }else{
+            spawnProj(this,this.fbSuper); this.meter=Math.min(100,this.meter+(this.fbSuper?0:4));
+          }
+        }
+        if(this.t>=24) this.state='idle';
+        break;
+      case 'beam':{
+        this.t++;
+        const w=this.beamWind, a=this.beamActive;
+        if(this.t>w && this.t<=w+a){
+          // 発射中は数フレームごとにヒット判定を再有効化（多段）＋画面揺れ
+          if((this.t-w)%4===1) this.hitConsumed=false;
+          if(this.t===w+1){ game.flash=Math.max(game.flash,16); game.shake=Math.max(game.shake,16); SFX.super(); }
+          game.shake=Math.max(game.shake,6);
+        }
+        if(this.t>=w+a+this.beamRec){ this.state='idle'; this.beamCfg=null; }
+        break;
+      }
+      case 'rush':{
+        this.t++;
+        this.x+=this.vx;
+        const dur=(this.rushCfg&&this.rushCfg.dur)||20;
+        if(this.t>=dur){ this.state='idle'; this.vx=0; this.rushCfg=null; }
+        break;
+      }
+      case 'atk':{
+        this.t++;
+        const a=this.atk;
+        // 百裂掌: 一定間隔でヒット判定を再有効化
+        if(a.mash && this.t>a.startup && this.t%7===0) this.hitConsumed=false;
+        if(this.t>=a.startup+a.active+a.rec){
+          this.state=(a.crouch&&inp.down)?'crouch':'idle';
+        }
+        break;
+      }
+      case 'jump':
+        this.x+=this.vx; this.y+=this.vy; this.vy+=0.8;
+        if(this.airAtk) this.airAtk.t++;
+        else if(this.bufP>0 && this.chr.sp.airFb && !this.airFb && this.checkSeq([2,3,6])){
+          // ゴウマ: 空虚弾（空中236P / 斜め下弾）
+          this.bufP=0; this.airFb=true;
+          const c=this.chr.sp.airFb;
+          projectiles.push({x:this.x+this.facing*30, y:this.y-70, vx:this.facing*c.spd, vy:c.vy,
+            owner:this, sup:false, dead:false, t:0, dmg:c.dmg, r:c.r, warm:!!c.warm, life:9999});
+          SFX.fb(); voice(this,'attack',0.85);
+        }
+        else if(this.bufP>0 && this.chr.sp.airDrop && !this.airAtk && this.checkSeq([2,1,4])){
+          // プリズムガード: フォトンドロップ（空中214P / 落下打撃投げ風）
+          this.bufP=0; this.airAtk={t:0,drop:true}; this.hitConsumed=false;
+          this.vy=Math.max(this.vy,1.5); this.vx=this.facing*2.5;
+          SFX.dp(); voice(this,'special1',0.85);
+        }
+        else if(this.bufP>0||this.bufK>0){ this.bufP=0; this.bufK=0; this.airAtk={t:0}; this.hitConsumed=false; }
+        if(this.y>=GROUND){ this.y=GROUND; this.vy=0; this.vx=0; this.airAtk=null; this.airFb=false; this.state='idle'; }
+        break;
+      case 'win': case 'ko_wait':
+        break;
+      default:{ // idle / walk / crouch
+        if(game.state!=='fight') { this.state='idle'; break; }
+        // AI直接コマンド
+        if(inp.cmd){
+          if(inp.cmd==='fb'){ this.specialFB(false); break; }
+          if(inp.cmd==='dp'){ this.specialDP(); break; }
+          if(inp.cmd==='super'){ this.specialFB(true); break; }
+          if(inp.cmd==='tatsu'){ this.specialTatsu(); break; }
+          if(inp.cmd==='grab'){ this.cmdGrab(opp); break; }
+          if(inp.cmd==='wgrab'){
+            // ゴウマ: 零式捕獲（ワープ後の投げ派生）
+            const wg=this.chr.sp.warpGrab;
+            if(wg && Math.abs(opp.x-this.x)<=wg.range && this.throwable(opp)) this.doThrow(opp,wg.dmg,'special1');
+            else this.startAttack('s_hp');
+            break;
+          }
+        }
+        if(inp.up && !inp.down){
+          this.state='jump'; this.vy=-15.2;
+          this.vx=((inp.right?1:0)-(inp.left?1:0))*4;
+          SFX.jump();
+          break;
+        }
+        if(inp.down){ this.state='crouch'; this.crouchHeld=true; }
+        else{
+          this.crouchHeld=false;
+          let mv=(inp.right?1:0)-(inp.left?1:0);
+          if(mv!==0){
+            const fwdMove=(mv===this.facing);
+            this.x+=mv*(fwdMove?3.0:2.4);
+            this.state='walk';
+          }else this.state='idle';
+        }
+        if(this.bufP>0){
+          this.bufP=0;
+          this.pTimes.push(this.frame);
+          if(this.pTimes.length>4) this.pTimes.shift();
+          const fwdHeld=(this.facing===1?inp.right:inp.left);
+          const backHeld=(this.facing===1?inp.left:inp.right);
+          const dist=Math.abs(opp.x-this.x);
+          if(this.chr.sp.supAlt && this.meter>=100 && this.checkSeq([2,1,4,2,1,4])){ this.specialBeam(true); }   // 214214P スーパー・レイバースト
+          else if(this.chr.sp.cmdGrab && this.checkSeq([6,3,2,1,4])){ this.cmdGrab(opp); }
+          else if(this.checkSeq([6,2,3])) this.specialDP();
+          else if(this.checkSeq([2,3,6])){
+            if(this.meter>=100 && this.checkSeq([2,3,6,2,3,6])) this.specialFB(true);   // 236236P（プリズムは beam に委譲）
+            else this.specialFB(false);
+          }
+          else if(this.chr.sp.mash && this.pTimes.length>=3 && (this.frame-this.pTimes[this.pTimes.length-3])<=26){
+            this.startAttack('mash'); SFX.dp(); voice(this,'special1',0.85);
+          }
+          else if(fwdHeld && dist<48 && this.throwable(opp) && this.state!=='crouch'){
+            this.doThrow(opp,12); // 共通通常投げ
+          }
+          else{
+            const pose=this.state==='crouch'?'c':'s';
+            const str= fwdHeld?'m': backHeld?'h':'l';
+            this.startAttack(pose+'_'+str+'p');
+          }
+        }else if(this.bufK>0){
+          this.bufK=0;
+          const fwdHeld=(this.facing===1?inp.right:inp.left);
+          const backHeld=(this.facing===1?inp.left:inp.right);
+          if(this.chr.sp.opticSweep && this.checkSeq([2,3,6])){ this.specialOptic(); }   // 236K ロー・レイ
+          else if(this.checkSeq([2,3,6]) && this.meter>=100) this.specialFB(true);
+          else if(this.checkSeq([2,1,4]) && this.specialTatsu()){ /* 214K */ }
+          else if(this.checkSeq([6,2,3])) this.specialDP();
+          else{
+            const pose=this.state==='crouch'?'c':'s';
+            const str= fwdHeld?'m': backHeld?'h':'l';
+            this.startAttack(pose+'_'+str+'k');
+          }
+        }
+        break;
+      }
+    }
+    // 壁
+    this.x=Math.max(36,Math.min(W-36,this.x));
+  }
+
+  // ================= 描画 =================
+  draw(){
+    const f=this;
+    // 影
+    ctx.fillStyle='rgba(0,0,0,.42)';
+    ctx.beginPath(); ctx.ellipse(f.x,GROUND+5,32,8,0,0,Math.PI*2); ctx.fill();
+
+    // プリズムガード: 一部の状態は追加モーションシート（char-prism-guard-extra.png）から描画する
+    const exIdx=prismExtra(f);
+    let src, frameArr;
+    if(exIdx!=null && IMGS[f.chr.extraImg] && f.chr.extraFrames){
+      src=IMGS[f.chr.extraImg]; frameArr=f.chr.extraFrames[exIdx];
+    }else{
+      src=IMGS[f.chr.img];
+      frameArr=f.chr.frames ? f.chr.frames[getFrameIdx(f)] : null;
+    }
+    if(!src || !frameArr){ return; }
+
+    const [sx,sy,sw,sh,cx,footY]=frameArr;
+    const sc=f.chr.scale;
+    const dw=sw*sc, dh=sh*sc;
+    const ox=cx*sc, oy=footY*sc;
+
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    if(f.facing<0) ctx.scale(-1,1);
+
+    // 影キャラ > 同キャラミラー(P2青系) の順で色変え
+    let base='';
+    if(f.tint) base=f.tint;
+    else if(f.idx===1 && p1.chr===p2.chr) base='hue-rotate(200deg) saturate(110%)';
+    let filt=base;
+    if(f.flashT>0) filt=(base?base+' ':'')+'brightness(6)';
+    if(filt) ctx.filter=filt;
+
+    ctx.drawImage(src, sx,sy,sw,sh, -ox,-oy, dw,dh);
+    ctx.filter='none';
+    ctx.restore();
+
+    // 昇龍拳の炎エフェクト（スプライトの上に重ねる）
+    if(f.state==='dp'){
+      ctx.save();
+      ctx.translate(f.x, f.y);
+      ctx.globalAlpha=0.38;
+      ctx.fillStyle='rgba(255,200,80,1)';
+      ctx.fillRect(f.facing*(-8),-oy*0.92,f.facing*22,-oy*0.32);
+      ctx.globalAlpha=1;
+      ctx.restore();
+    }
+  }
+}
+
+// ================= CPU AI =================
+function aiTeleport(f,opp){
+  // ゴウマ専用: 零式転移（CPU専用の短距離ワープ）
+  f.tpCd=(f.tpCd||0);
+  if(f.tpCd>0){ f.tpCd--; return; }
+  if(Math.random()>=0.012) return;
+  f.tpCd=180; f.tpT=24;
+  spark(f.x,f.y-60,'#ff4a4a',10);
+  const side=Math.random()<0.5?1:-1;
+  f.x=Math.max(60,Math.min(W-60, opp.x+side*72));
+  spark(f.x,f.y-60,'#ff4a4a',14);
+  SFX.swing();
+}
+function aiThink(f,opp){
+  const inp={left:false,right:false,up:false,down:false,punch:false,kick:false,cmd:null};
+  if(game.state!=='fight') return inp;
+  if(f.chr.id==='gouma' && f.canAct()) aiTeleport(f,opp);
+  const dx=opp.x-f.x, ad=Math.abs(dx);
+  const fwd= dx>0?'right':'left', back= dx>0?'left':'right';
+
+  // 反応系
+  const danger=projectiles.find(pr=>pr.owner!==f && !pr.dead &&
+      Math.sign(f.x-pr.x)===Math.sign(pr.vx) && Math.abs(pr.x-f.x)<180);
+  if(danger && f.grounded() && f.canAct()){
+    if(Math.random()<0.10){ inp.up=true; inp[fwd]=true; return inp; }
+    if(Math.random()<0.20){ f.aiPlan='block'; f.aiT=22; }
+  }
+  if((opp.state==='jump') && ad<150 && f.canAct() && Math.random()<0.10){
+    inp.cmd='dp'; return inp;
+  }
+
+  f.aiT--;
+  if(f.aiT<=0){
+    const r=Math.random();
+    if(ad>320){
+      f.aiPlan = r<0.30?'fb' : r<0.75?'approach' : r<0.90?'jumpin' : 'idle';
+      f.aiT=30+Math.random()*40|0;
+    }else if(ad>150){
+      f.aiPlan = r<0.48?'approach' : r<0.63?'jumpin' : r<0.78?'fb' : r<0.90?'kick' : 'block';
+      f.aiT=24+Math.random()*30|0;
+    }else{
+      f.aiPlan = r<0.30?'punch' : r<0.50?'kick' : r<0.65?'sweep' : r<0.80?'block' : r<0.92?'retreat' : 'dp';
+      f.aiT=16+Math.random()*22|0;
+    }
+    if(f.meter>=100 && ad>240 && Math.random()<0.5) f.aiPlan='super';
+    if(f.chr.sp.cmdGrab && ad<70 && Math.random()<0.30) f.aiPlan='grab';
+    if(f.chr.sp.tatsu && f.chr.sp.tatsu.dmg && ad>90 && ad<210 && Math.random()<0.16) f.aiPlan='tatsu';
+    f.aiNew=true;
+  }else f.aiNew=false;
+
+  // ゴウマ: ワープ直後は投げ派生を狙う
+  if(f.tpT>0){
+    f.tpT--;
+    if(f.chr.sp.warpGrab && ad<f.chr.sp.warpGrab.range && f.canAct()){ inp.cmd='wgrab'; f.tpT=0; return inp; }
+  }
+
+  switch(f.aiPlan){
+    case 'approach': inp[fwd]=true; break;
+    case 'retreat':  inp[back]=true; break;
+    case 'jumpin':   inp[fwd]=true; if(f.aiNew) inp.up=true; break;
+    case 'fb':       if(f.aiNew) inp.cmd='fb'; break;
+    case 'super':    if(f.aiNew) inp.cmd='super'; break;
+    case 'dp':       if(f.aiNew) inp.cmd='dp'; break;
+    case 'tatsu':    if(f.aiNew) inp.cmd='tatsu'; break;
+    case 'grab':     inp[fwd]=true; if(ad<64 && f.aiNew) inp.cmd='grab'; break;
+    case 'punch':    if(f.aiNew){ inp.punch=true; if(Math.random()<0.5) inp[fwd]=true; } break;
+    case 'kick':     if(f.aiNew){ inp.kick=true; if(Math.random()<0.5) inp[fwd]=true; } break;
+    case 'sweep':    inp.down=true; if(f.aiNew) inp.kick=true; break;
+    case 'block':    inp[back]=true; break;
+  }
+  return inp;
+}
+
+// ================= ゲーム本体 =================
+const game={
+  state:'title', mode:'cpu', menuIdx:0,
+  round:1, wins:[0,0], timer:99*60,
+  stateTimer:0, hitstop:0, shake:0, flash:0,
+  winner:-1, koText:'K.O.', frame:0, score:[0,0],
+  stage:'harbor',
+  sel:[0,1], selPhase:0, stageIdx:0,   // stageIdx: 0=RANDOM, 1..=STAGE_IDS
+  storyChar:0, storyNodes:null, storyIdx:0,
+  lastHitSuper:false, superFxT:0,   // スーパーコンボKO背景演出
+};
+const SUPERFX_DUR=36;   // 約0.6秒（render基準60fps）
+let p1=new Fighter(0,CHARS.ryuji);
+let p2=new Fighter(1,CHARS.aoi);
+
+function startMatch(mode){
+  game.mode=mode; game.wins=[0,0]; game.round=1; game.score=[0,0];
+  bgmStart();
+  startRound(1);
+}
+
+function startVsMatch(stageId){
+  // stageId 指定があればそのステージ、なければ全ステージからランダム
+  game.stage = stageId || STAGE_IDS[Math.floor(Math.random()*STAGE_IDS.length)];
+  p1=new Fighter(0,CHARS[ROSTER[game.sel[0]]]);
+  p2=new Fighter(1,CHARS[ROSTER[game.sel[1]]]);
+  startMatch(game.mode);
+}
+
+// ================= ストーリーモード =================
+// 全角テキストを n 文字で折り返し
+function wrapText(s,n){
+  const out=[];
+  for(let i=0;i<s.length;i+=n) out.push(s.slice(i,i+n));
+  return out;
+}
+function storyStart(cid){
+  const st=STORIES[cid];
+  game.storyChar=cid;
+  game.storyFight=0;
+  const nodes=[
+    {type:'text', bg:'harbor', lines:['【 '+st.title+' 】','',...wrapText(st.intro,24)]},
+  ];
+  for(const oid of st.route){
+    const o=OPPONENTS[oid];
+    nodes.push({type:'text', bg:o.stage, lines:['VS  '+o.name,'',...wrapText('「'+o.intro+'」',24)]});
+    nodes.push({type:'fight', opp:o.char, oppName:o.name, stage:o.stage});
+  }
+  nodes.push({type:'text', bg:'neon', lines:[...wrapText(st.ending,24),'','── '+CHARS[cid].name+'  STORY CLEAR ──']});
+  game.storyNodes=nodes;
+  game.storyIdx=0;
+  enterStoryNode();
+}
+function enterStoryNode(){
+  if(game.storyIdx>=game.storyNodes.length){ game.state='title'; bgmStop(); return; }
+  const n=game.storyNodes[game.storyIdx];
+  game.stage=n.bg||n.stage;
+  if(n.type==='text'){
+    game.state='story';
+  }else{
+    p1=new Fighter(0,CHARS[game.storyChar]);
+    p2=new Fighter(1,CHARS[n.opp]);
+    if(n.oppName) p2.name=n.oppName;
+    startMatch('story');
+  }
+}
+function startRound(n){
+  game.round=n;
+  p1.reset(W/2-180, 1);
+  p2.reset(W/2+180,-1);
+  projectiles=[]; particles=[];
+  game.timer=99*60;
+  game.lastHitSuper=false; game.superFxT=0;
+  game.state='intro'; game.stateTimer=130;
+  SFX.round();
+}
+
+function rectOverlap(a,b){
+  return a.x<b.x+b.w && a.x+a.w>b.x && a.y<b.y+b.h && a.y+a.h>b.y;
+}
+
+function resolveAttack(att,def){
+  const hb=att.activeHitbox();
+  if(!hb) return;
+  if(def.invul()) return;
+  if(!rectOverlap(hb,def.hurtbox())) return;
+  att.hitConsumed=true;
+  const dir=(def.x>=att.x)?1:-1;
+  const info=att.curAtkInfo();
+  // この一撃がスーパーコンボか（巨大ビーム / 超必ラッシュ）。KO時の背景演出判定に使う
+  game.lastHitSuper = att.state==='beam' ||
+    (att.state==='rush' && !!att.rushCfg && att.rushCfg===att.chr.sp.sup);
+  const px=def.x-dir*16, py=hb.y+hb.h/2;
+  if(def.inpBack && def.grounded() && ['idle','walk','crouch','block'].includes(def.state)){
+    const chip=info.special?Math.ceil(info.dmg/4):0;
+    def.enterBlock(14,chip,dir,def.state==='crouch'||def.crouchHeld);
+    att.meter=Math.min(100,att.meter+4);
+    spark(px,py,'#9ad',5);
+    SFX.block();
+    game.hitstop=4;
+  }else{
+    def.takeHit(info.dmg,dir,info.kd);
+    att.meter=Math.min(100,att.meter+12);
+    game.score[att.idx]+=info.dmg*105;
+    spark(px,py,info.heavy?'#ffd24a':'#ff8844',info.heavy?12:8);
+    if(info.heavy){ SFX.heavy(info.btn); game.shake=8; game.hitstop=9; }
+    else { SFX.hit(info.btn,info.str); game.hitstop=6; }
+  }
+  checkKO();
+}
+
+function resolveProjectiles(){
+  for(const pr of projectiles){
+    if(pr.dead) continue;
+    pr.t++; pr.x+=pr.vx;
+    if(pr.vy){ pr.y+=pr.vy; if(pr.y>=GROUND-8){ spark(pr.x,GROUND-8,'#f84',8); pr.dead=true; continue; } }
+    if(pr.x<-40||pr.x>W+40||pr.t>pr.life){ pr.dead=true; continue; }
+    // 弾同士の相殺
+    for(const o of projectiles){
+      if(o===pr||o.dead||o.owner===pr.owner) continue;
+      if(Math.abs(o.x-pr.x)<o.r+pr.r && Math.abs(o.y-pr.y)<o.r+pr.r){
+        if(pr.sup&&!o.sup){ o.dead=true; }
+        else if(o.sup&&!pr.sup){ pr.dead=true; }
+        else { pr.dead=true; o.dead=true; }
+        spark((o.x+pr.x)/2,pr.y,'#aef',10);
+        SFX.block();
+      }
+    }
+    if(pr.dead) continue;
+    const def=(pr.owner===p1)?p2:p1;
+    if(def.invul()) continue;
+    const box={x:pr.x-pr.r,y:pr.y-pr.r,w:pr.r*2,h:pr.r*2};
+    if(rectOverlap(box,def.hurtbox())){
+      pr.dead=true;
+      game.lastHitSuper=!!pr.sup;
+      const dir=Math.sign(pr.vx)||1;
+      if(def.inpBack && def.grounded() && ['idle','walk','crouch','block'].includes(def.state)){
+        def.enterBlock(16,Math.ceil(pr.dmg/4),dir,def.state==='crouch'||def.crouchHeld);
+        spark(pr.x,pr.y,'#9ad',6); SFX.block(); game.hitstop=4;
+      }else{
+        def.takeHit(pr.dmg,dir,pr.sup);
+        pr.owner.meter=Math.min(100,pr.owner.meter+10);
+        game.score[pr.owner.idx]+=pr.dmg*105;
+        spark(pr.x,pr.y,pr.sup?'#ffb44d':'#7fd4ff',pr.sup?16:9);
+        if(pr.sup){ SFX.heavy(); game.shake=10; game.hitstop=10; } else { SFX.hit(); game.hitstop=6; }
+      }
+      checkKO();
+    }
+  }
+  projectiles=projectiles.filter(pr=>!pr.dead);
+}
+
+function checkKO(){
+  if(game.state!=='fight') return;
+  if(p1.hp<=0||p2.hp<=0){
+    game.winner = p1.hp<=0 ? (p2.hp<=0?-1:1) : 0;
+    game.koText='K.O.';
+    game.state='ko'; game.stateTimer=170;
+    game.shake=14;
+    if(game.lastHitSuper) game.superFxT=SUPERFX_DUR;   // スーパーコンボKOのみ背景演出
+    SFX.ko();
+  }
+}
+
+function pushApart(){
+  if(Math.abs(p1.y-p2.y)>80) return;
+  const overlapStates=['down','getup','fall'];
+  if(overlapStates.includes(p1.state)||overlapStates.includes(p2.state)) return;
+  const dx=p2.x-p1.x;
+  if(Math.abs(dx)<38){
+    const push=(38-Math.abs(dx))/2;
+    const s=dx>=0?1:-1;
+    p1.x-=push*s; p2.x+=push*s;
+    p1.x=Math.max(36,Math.min(W-36,p1.x));
+    p2.x=Math.max(36,Math.min(W-36,p2.x));
+  }
+}
+
+// ================= 進行 =================
+function step(){
+  game.frame++;
+  if(game.hitstop>0){
+    // ヒットストップ中も方向履歴とボタン先行入力は保持する
+    game.hitstop--;
+    if(game.state==='fight'){
+      p1.pushDir(humanInput(MAP1));
+      if(game.mode==='2p') p2.pushDir(humanInput(MAP2));
+    }
+    return;
+  }
+
+  switch(game.state){
+    case 'title':{
+      if(pressed.has('w')||pressed.has('arrowup')){ game.menuIdx=(game.menuIdx+2)%3; SFX.sel(); }
+      if(pressed.has('s')||pressed.has('arrowdown')){ game.menuIdx=(game.menuIdx+1)%3; SFX.sel(); }
+      if(pressed.has('enter')){
+        game.mode=['story','cpu','2p'][game.menuIdx];
+        game.sel=[0,1]; game.selPhase=0;
+        game.state='select';
+        SFX.round();
+      }
+      break;
+    }
+    case 'select':{
+      const ph=game.selPhase;
+      const mv=(d)=>{ game.sel[ph]=(game.sel[ph]+d+ROSTER.length)%ROSTER.length; SFX.sel(); };
+      if(ph===0){
+        if(pressed.has('a')||pressed.has('arrowleft')) mv(-1);
+        if(pressed.has('d')||pressed.has('arrowright')) mv(1);
+        if(pressed.has('f')||pressed.has('enter')){
+          SFX.round();
+          voice({chr:CHARS[ROSTER[game.sel[0]]]},'start1',0.85);
+          if(game.mode==='story'){ storyStart(ROSTER[game.sel[0]]); }
+          else if(game.mode==='cpu'){
+            let o; do{ o=Math.floor(Math.random()*ROSTER.length); }while(o===game.sel[0]);
+            game.sel[1]=o;
+            game.stageIdx=0; game.state='stagesel';
+          }
+          else { game.sel[1]=game.sel[0]; game.selPhase=1; }
+        }
+      }else{
+        if(pressed.has('arrowleft')) mv(-1);
+        if(pressed.has('arrowright')) mv(1);
+        if(pressed.has('k')||pressed.has('enter')){ SFX.round(); game.stageIdx=0; game.state='stagesel'; }
+      }
+      break;
+    }
+    case 'stagesel':{
+      const n=STAGE_IDS.length+1;   // 先頭はRANDOM
+      if(pressed.has('a')||pressed.has('arrowleft')){ game.stageIdx=(game.stageIdx+n-1)%n; SFX.sel(); }
+      if(pressed.has('d')||pressed.has('arrowright')){ game.stageIdx=(game.stageIdx+1)%n; SFX.sel(); }
+      if(pressed.has('f')||pressed.has('k')||pressed.has('enter')){
+        SFX.round();
+        startVsMatch(game.stageIdx===0 ? null : STAGE_IDS[game.stageIdx-1]);
+      }
+      break;
+    }
+    case 'story':{
+      if(pressed.has('enter')||pressed.has('f')||pressed.has('k')){
+        SFX.sel();
+        game.storyIdx++;
+        enterStoryNode();
+      }
+      break;
+    }
+    case 'intro':{
+      p1.update(EMPTY_INP,p2); p2.update(EMPTY_INP,p1);
+      game.stateTimer--;
+      if(game.stateTimer===110 && game.round===1) voice(p1,'start1',0.85);
+      if(game.stateTimer===45) SFX.round();
+      if(game.stateTimer<=0) game.state='fight';
+      break;
+    }
+    case 'fight':{
+      const i1=humanInput(MAP1);
+      const i2=(game.mode==='2p')?humanInput(MAP2):aiThink(p2,p1);
+      p1.update(i1,p2); p2.update(i2,p1);
+      pushApart();
+      resolveAttack(p1,p2); resolveAttack(p2,p1);
+      resolveProjectiles();
+      updParticles();
+      game.timer--;
+      if(game.timer<=0 && game.state==='fight'){
+        game.winner = p1.hp===p2.hp ? -1 : (p1.hp>p2.hp?0:1);
+        game.koText='TIME OVER';
+        game.state='ko'; game.stateTimer=170;
+        SFX.ko();
+      }
+      break;
+    }
+    case 'ko':{
+      p1.update(EMPTY_INP,p2); p2.update(EMPTY_INP,p1);
+      resolveProjectiles(); updParticles();
+      game.stateTimer--;
+      if(game.stateTimer===70 && game.winner>=0){
+        const wf=game.winner===0?p1:p2;
+        if(['idle','walk','crouch'].includes(wf.state)) wf.state='win';
+        voice(wf,'win1',0.9);
+      }
+      if(game.stateTimer<=0){
+        if(game.winner>=0) game.wins[game.winner]++;
+        if(game.winner>=0 && game.wins[game.winner]>=2){
+          game.state='matchend'; game.stateTimer=0;
+        }else{
+          startRound(game.round+1);
+        }
+      }
+      break;
+    }
+    case 'matchend':{
+      p1.update(EMPTY_INP,p2); p2.update(EMPTY_INP,p1);
+      updParticles();
+      if(pressed.has('enter')){
+        bgmStop();
+        if(game.mode==='story'){
+          if(game.winner===0){ game.storyIdx++; enterStoryNode(); }
+          else { enterStoryNode(); }   // 同じ戦いをリトライ
+        }else{
+          game.state='title';
+        }
+      }
+      break;
+    }
+  }
+  if(pressed.has('escape') && game.state!=='title'){ game.state='title'; bgmStop(); }
+  pressed.clear();
+}
+
+// ================= 背景（エアフォース基地ステージ） =================
+function starPath(cx,cy,r,rot){
+  ctx.beginPath();
+  for(let i=0;i<10;i++){
+    const rr=(i%2===0)?r:r*0.45;
+    const a=rot+i*Math.PI/5;
+    const x=cx+Math.cos(a)*rr, y=cy+Math.sin(a)*rr;
+    if(i===0) ctx.moveTo(x,y); else ctx.lineTo(x,y);
+  }
+  ctx.closePath();
+}
+function wood(x,y,w,h){
+  ctx.fillStyle='#9a6630'; ctx.fillRect(x,y,w,h);
+  ctx.strokeStyle='#6e4418'; ctx.lineWidth=3;
+  ctx.strokeRect(x+1,y+1,w-2,h-2);
+  ctx.beginPath();
+  ctx.moveTo(x,y); ctx.lineTo(x+w,y+h);
+  ctx.moveTo(x+w,y); ctx.lineTo(x,y+h);
+  ctx.stroke();
+}
+function drawJet(){
+  // 排気ノズル（左端）
+  ctx.fillStyle='#4a4a52'; ctx.fillRect(96,272,46,52);
+  ctx.fillStyle='#33333a'; ctx.fillRect(88,280,14,36);
+  // 垂直尾翼
+  ctx.fillStyle='#8a909c';
+  ctx.beginPath(); ctx.moveTo(140,290); ctx.lineTo(168,126); ctx.lineTo(214,126); ctx.lineTo(246,290); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#c03028'; ctx.fillRect(168,148,50,14);
+  // 水平尾翼
+  ctx.fillStyle='#7e848f';
+  ctx.beginPath(); ctx.moveTo(150,320); ctx.lineTo(300,314); ctx.lineTo(268,350); ctx.lineTo(160,350); ctx.closePath(); ctx.fill();
+  // 胴体
+  const bg=ctx.createLinearGradient(0,246,0,340);
+  bg.addColorStop(0,'#b8bec8'); bg.addColorStop(0.55,'#949aa6'); bg.addColorStop(1,'#6e7480');
+  ctx.fillStyle=bg;
+  ctx.beginPath();
+  ctx.moveTo(120,268);
+  ctx.lineTo(560,252);
+  ctx.quadraticCurveTo(760,252,872,296);
+  ctx.quadraticCurveTo(800,330,640,336);
+  ctx.lineTo(120,340);
+  ctx.closePath(); ctx.fill();
+  // ノーズコーン
+  ctx.fillStyle='#5a606c';
+  ctx.beginPath(); ctx.moveTo(816,276); ctx.quadraticCurveTo(884,288,872,298); ctx.quadraticCurveTo(856,312,798,314); ctx.closePath(); ctx.fill();
+  // キャノピー（紫グラデーション）
+  const cg=ctx.createLinearGradient(0,200,0,268);
+  cg.addColorStop(0,'#d055d0'); cg.addColorStop(0.5,'#7030a8'); cg.addColorStop(1,'#2a1850');
+  ctx.fillStyle=cg;
+  ctx.beginPath(); ctx.moveTo(560,256); ctx.quadraticCurveTo(640,198,726,266); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='#3a3f4a'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.moveTo(560,256); ctx.quadraticCurveTo(640,198,726,266); ctx.stroke();
+  // エアインテーク
+  ctx.fillStyle='#4e545e';
+  ctx.beginPath(); ctx.ellipse(600,338,70,15,0,0,Math.PI*2); ctx.fill();
+  // 主翼
+  ctx.fillStyle='#878d99';
+  ctx.beginPath(); ctx.moveTo(330,322); ctx.lineTo(560,318); ctx.lineTo(508,368); ctx.lineTo(360,368); ctx.closePath(); ctx.fill();
+  // 国籍マーク（星）
+  ctx.fillStyle='#2a3550'; ctx.beginPath(); ctx.arc(420,288,17,0,Math.PI*2); ctx.fill();
+  starPath(420,288,12,-Math.PI/2); ctx.fillStyle='#e8e8f0'; ctx.fill();
+  // パネルライン
+  ctx.strokeStyle='rgba(60,65,75,.5)'; ctx.lineWidth=2;
+  ctx.beginPath();
+  ctx.moveTo(150,300); ctx.lineTo(560,292);
+  ctx.moveTo(620,302); ctx.lineTo(796,302);
+  ctx.stroke();
+  // 降着装置
+  ctx.strokeStyle='#5a5f68'; ctx.lineWidth=8;
+  ctx.beginPath(); ctx.moveTo(700,330); ctx.lineTo(700,402); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(380,366); ctx.lineTo(380,406); ctx.stroke();
+  ctx.fillStyle='#22242a';
+  ctx.beginPath(); ctx.arc(700,410,14,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(380,412,13,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#777';
+  ctx.beginPath(); ctx.arc(700,410,6,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(380,412,5,0,Math.PI*2); ctx.fill();
+}
+function drawSoldier(x,y,type,hair,seed){
+  const U='#5c7044', U2='#6e8454', S='#e0b080';
+  ctx.save(); ctx.translate(x,y);
+  if(type==='sit'){
+    wood(-26,-26,52,26);
+    ctx.fillStyle=U2; ctx.fillRect(-20,-30,16,24); ctx.fillRect(4,-30,16,24);
+    ctx.fillStyle=U; ctx.fillRect(-16,-58,32,30);
+    ctx.fillStyle=S; ctx.fillRect(-9,-74,18,16);
+    ctx.fillStyle=hair; ctx.fillRect(-10,-77,20,7);
+    ctx.fillStyle=S;
+    if(((game.frame>>4)+seed)%6===0) ctx.fillRect(12,-86,8,30);
+    else ctx.fillRect(14,-54,8,20);
+  }else if(type==='stand'){
+    ctx.fillStyle=U2; ctx.fillRect(-14,-34,12,34); ctx.fillRect(2,-34,12,34);
+    ctx.fillStyle=U; ctx.fillRect(-16,-72,32,38);
+    ctx.fillStyle=S; ctx.fillRect(-9,-88,18,16);
+    ctx.fillStyle=hair; ctx.fillRect(-10,-91,20,7);
+    ctx.fillStyle=S; ctx.fillRect(-22,-66,8,22); ctx.fillRect(14,-66,8,22);
+  }else{ // cheer
+    ctx.fillStyle=U2; ctx.fillRect(-14,-32,12,32); ctx.fillRect(2,-32,12,32);
+    ctx.fillStyle=U; ctx.fillRect(-15,-68,30,36);
+    ctx.fillStyle=S; ctx.fillRect(-9,-84,18,16);
+    ctx.fillStyle=hair; ctx.fillRect(-10,-87,20,7);
+    ctx.fillStyle=S;
+    if(((game.frame>>3)+seed)%2){ ctx.fillRect(-24,-92,8,26); ctx.fillRect(16,-78,8,22); }
+    else { ctx.fillRect(-24,-78,8,22); ctx.fillRect(16,-92,8,26); }
+  }
+  ctx.restore();
+}
+function drawBG(){
+  const bgImg=IMGS[game.stage];
+  if(bgImg){
+    // stage image: 1672×941, scale to fit width 896
+    // ground in image ~87% → y=819 → scaled y=819*(504/941)=439 ≈ GROUND ✓
+    ctx.drawImage(bgImg, 0, 0, W, H);
+    // 地面ラインの強調
+    ctx.fillStyle='rgba(0,0,0,.18)';
+    ctx.fillRect(0, GROUND+4, W, H-GROUND-4);
+    ctx.fillStyle='rgba(255,240,200,.12)';
+    ctx.fillRect(0, GROUND, W, 3);
+  } else {
+    // フォールバック（ロード前）
+    ctx.fillStyle='#1a0a20'; ctx.fillRect(0,0,W,H);
+  }
+}
+
+// ================= HUD・テキスト =================
+function pxText(str,x,y,size,col,align,shadow){
+  ctx.font='bold '+size+'px "Courier New",monospace';
+  ctx.textAlign=align||'center'; ctx.textBaseline='middle';
+  if(shadow!==false){ ctx.fillStyle='#000'; ctx.fillText(str,x+3,y+3); }
+  ctx.fillStyle=col; ctx.fillText(str,x,y);
+}
+function drawHUD(){
+  // スコア帯（オレンジグラデーション）
+  const sg=ctx.createLinearGradient(0,0,0,24);
+  sg.addColorStop(0,'#f8c43a'); sg.addColorStop(1,'#d8641e');
+  ctx.fillStyle=sg; ctx.fillRect(0,0,W,24);
+  ctx.fillStyle='rgba(0,0,0,.3)'; ctx.fillRect(0,22,W,2);
+  pxText('1P',56,12,16,'#3a2090','left',false);
+  pxText(String(Math.min(99999,game.score[0])).padStart(5,'0'),100,12,16,'#3a2090','left',false);
+  pxText('99999',W/2,12,16,'#3a2090','center',false);
+  pxText('2P',W-208,12,16,'#3a2090','left',false);
+  pxText(String(Math.min(99999,game.score[1])).padStart(5,'0'),W-164,12,16,'#3a2090','left',false);
+  // 体力バー（金枠）
+  const bw=320, bh=18, y=36;
+  for(const [f,x0,flip] of [[p1,70,false],[p2,W-70-bw,true]]){
+    const fr=ctx.createLinearGradient(0,y-5,0,y+bh+5);
+    fr.addColorStop(0,'#f8e070'); fr.addColorStop(0.5,'#c87818'); fr.addColorStop(1,'#f8e070');
+    ctx.fillStyle=fr; ctx.fillRect(x0-4,y-4,bw+8,bh+8);
+    ctx.fillStyle='#000'; ctx.fillRect(x0-1,y-1,bw+2,bh+2);
+    ctx.fillStyle='#a31212'; ctx.fillRect(x0,y,bw,bh);
+    const w=bw*f.hp/100;
+    ctx.fillStyle= f.hp>30 ? '#f8d820':'#ff5a2a';
+    if(flip) ctx.fillRect(x0,y,w,bh); else ctx.fillRect(x0+bw-w,y,w,bh);
+    ctx.fillStyle='rgba(255,255,255,.35)';
+    if(flip) ctx.fillRect(x0,y+2,w,3); else ctx.fillRect(x0+bw-w,y+2,w,3);
+  }
+  // KOバッジ
+  const cx=W/2, cy=45;
+  const rg=ctx.createRadialGradient(cx,cy,4,cx,cy,30);
+  rg.addColorStop(0,'#3858c8'); rg.addColorStop(0.75,'#1a2870'); rg.addColorStop(1,'#f8e070');
+  ctx.fillStyle=rg;
+  ctx.beginPath(); ctx.arc(cx,cy,28,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#f8e070'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.arc(cx,cy,28,0,Math.PI*2); ctx.stroke();
+  pxText('KO',cx,cy+1,26,'#f8d020');
+  // 名前
+  pxText(p1.name,74,74,18,'#e83020','left');
+  pxText(p2.name+(game.mode==='cpu'?' (CPU)':''),W-74,74,18,'#e83020','right');
+  // 勝利マーク
+  for(let i=0;i<2;i++){
+    ctx.fillStyle= i<game.wins[0] ? '#ffd24a':'rgba(0,0,0,.35)';
+    ctx.fillRect(156+i*20,68,14,8);
+    ctx.fillStyle= i<game.wins[1] ? '#ffd24a':'rgba(0,0,0,.35)';
+    ctx.fillRect(W-170-i*20,68,14,8);
+  }
+  // タイマー（KOバッジ下）
+  const t=Math.max(0,Math.ceil(game.timer/60));
+  pxText(String(t).padStart(2,'0'),W/2,94,30, t<=10?'#ff4a2a':'#4a5ae8');
+  // スーパーゲージ
+  const gw=240, gy=H-26;
+  for(const [f,gx,align] of [[p1,40,1],[p2,W-40-gw,1]]){
+    ctx.fillStyle='#000'; ctx.fillRect(gx-2,gy-2,gw+4,16);
+    ctx.fillStyle='#123'; ctx.fillRect(gx,gy,gw,12);
+    const mw=gw*f.meter/100;
+    ctx.fillStyle= f.meter>=100 ? (game.frame%10<5?'#fff':'#6cf') : '#3a8cf4';
+    ctx.fillRect(gx,gy,mw,12);
+    if(f.meter>=100) pxText('SUPER!',gx+gw/2,gy+6,12,'#fff');
+  }
+}
+// 細い水平ビーム（プリズムショット 236P / ロー・レイ 236K）: 白コア＋マゼンタ縁
+function drawThinBeam(pr){
+  const dir=Math.sign(pr.vx)||1;
+  const len=44+pr.r*2.4, x=pr.x, y=pr.y, r=pr.r;
+  ctx.save();
+  ctx.globalAlpha=0.88;
+  ctx.fillStyle='rgba(255,70,200,.7)';   ctx.fillRect(x-dir*len, y-r-3, dir*len, (r+3)*2);
+  ctx.fillStyle='#fff';                  ctx.fillRect(x-dir*len, y-r*0.5, dir*len, r);
+  ctx.fillStyle='rgba(255,160,235,.95)';
+  ctx.beginPath(); ctx.arc(x,y,r+2,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.9)';
+  ctx.beginPath(); ctx.arc(x,y,r*0.6,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function drawProj(pr){
+  if(pr.beamThin){ drawThinBeam(pr); return; }
+  const a=pr.t/2;
+  ctx.save(); ctx.translate(pr.x,pr.y);
+  // 螺旋の尾
+  for(let i=1;i<=6;i++){
+    const off=-Math.sign(pr.vx)*(i*pr.r*0.62+6);
+    const r=Math.max(4,pr.r*(1-i*0.12));
+    ctx.fillStyle= (pr.sup||pr.warm)
+      ? `rgba(255,${160-i*18},40,${0.55-i*0.09})`
+      : `rgba(120,${200-i*14},255,${0.55-i*0.09})`;
+    ctx.beginPath(); ctx.arc(off, Math.sin(a+i)*5, r, 0, Math.PI*2); ctx.fill();
+  }
+  // 本体＋渦巻き
+  ctx.fillStyle= pr.warm?'#ff6a4a':(pr.sup?'#ffb44d':'#86d8ff');
+  ctx.beginPath(); ctx.arc(0,0,pr.r,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='rgba(255,255,255,.9)'; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(0,0,pr.r*0.64,a,a+4.2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(0,0,pr.r*0.36,-a,-a+3.4); ctx.stroke();
+  ctx.fillStyle='#fff';
+  ctx.beginPath(); ctx.arc(0,0,pr.r*0.28,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+
+// 巨大ビーム超必の演出: 画面横断の太い白コア＋ピンク/マゼンタ縁、横スピードライン、発射口フラッシュ。
+// ビーム本体はキャンバス描画（スプライト内のビームには依存しない）。
+function drawBeamSuper(f){
+  if(!f.beamCfg) return;
+  const w=f.beamWind, a=f.beamActive;
+  if(f.t<=w || f.t>w+a) return;                 // 発射中のみ
+  const prog=(f.t-w)/a, dir=f.facing;
+  const y=f.y-80, x0=f.x+dir*34;
+  const x1= dir>0 ? W+40 : -40;
+  const reach=Math.min(1,(f.t-w)/4);            // 前方へ素早く伸びる
+  const tipX=x0+(x1-x0)*reach;
+  const half=(26+Math.sin(f.t*0.7)*4)*(0.55+0.45*Math.min(1,prog*3));
+  const left=Math.min(x0,tipX), bw=Math.abs(tipX-x0);
+  ctx.save();
+  // 横スピードライン
+  ctx.globalAlpha=0.5; ctx.strokeStyle='rgba(255,255,255,.6)'; ctx.lineWidth=2;
+  for(let i=0;i<6;i++){
+    const yy=y+(Math.random()-0.5)*half*2.4;
+    ctx.beginPath(); ctx.moveTo(x0,yy); ctx.lineTo(tipX,yy); ctx.stroke();
+  }
+  ctx.globalAlpha=1;
+  // マゼンタ外縁
+  const gGlow=ctx.createLinearGradient(0,y-half*1.8,0,y+half*1.8);
+  gGlow.addColorStop(0,'rgba(255,40,180,0)'); gGlow.addColorStop(0.5,'rgba(255,60,200,.85)'); gGlow.addColorStop(1,'rgba(255,40,180,0)');
+  ctx.fillStyle=gGlow; ctx.fillRect(left, y-half*1.7, bw, half*3.4);
+  // 白コア
+  const gCore=ctx.createLinearGradient(0,y-half,0,y+half);
+  gCore.addColorStop(0,'rgba(255,200,240,.2)'); gCore.addColorStop(0.5,'rgba(255,255,255,1)'); gCore.addColorStop(1,'rgba(255,200,240,.2)');
+  ctx.fillStyle=gCore; ctx.fillRect(left, y-half, bw, half*2);
+  // 発射口フラッシュ
+  ctx.fillStyle='rgba(255,90,210,.6)'; ctx.beginPath(); ctx.arc(x0,y,half*2.0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.92)'; ctx.beginPath(); ctx.arc(x0,y,half*1.25*(0.85+Math.random()*0.3),0,Math.PI*2); ctx.fill();
+  ctx.restore();
+  if(Math.random()<0.6) spark(tipX,y+(Math.random()-0.5)*half,'#ff7ad2',3);
+}
+
+function drawTitle(){
+  drawBG();
+  ctx.fillStyle='rgba(0,0,10,.45)'; ctx.fillRect(0,0,W,H);
+  pxText('SUPER',W/2,86,40,'#ffd24a');
+  pxText('FIGHTER II X',W/2,140,64,'#ff5a2a');
+  pxText('〜 ブラウザ対戦格闘・ストIIX リスペクト 〜',W/2,186,16,'#fbe9c0');
+  const items=['ストーリーモード','1P  vs  CPU','2P  対戦 (同じキーボード)'];
+  for(let i=0;i<items.length;i++){
+    const sel=(game.menuIdx===i);
+    pxText((sel?'▶ ':'   ')+items[i],W/2,242+i*36,24, sel?(game.frame%30<20?'#fff':'#ffd24a'):'#9a8a7a');
+  }
+  pxText('ENTERで開始 / ESCでタイトルへ',W/2,354,15,'#cbb');
+  pxText('1P: WASD移動  F=パンチ G=キック',W/2,388,14,'#8fd');
+  pxText('2P: 矢印キー移動  K=パンチ L=キック',W/2,410,14,'#f9a');
+  pxText('通常技: ボタン＋ニュートラル/前/後で 弱・中・強  しゃがみ対応',W/2,432,13,'#ffd24a');
+  pxText('飛び道具:↓↘→P  対空:→↓↘P  突進/移動:↓↙←K  投げ:接近して前＋P',W/2,452,13,'#ffd24a');
+  pxText('超必: ゲージMAXで ↓↘→K   ブロント: ←↙↓↘→P コマ投げ   M: BGM',W/2,470,13,'#ffd24a');
+  pxText('プリズムガード: ↓↘→P ビーム / ↓↙←K 足元ビーム / ↓↘→↓↘→P 巨大ビーム超必',W/2,488,12,'#7fd4ff');
+}
+
+function drawCharPreview(key,cx,baseY,scale,filt){
+  const c=CHARS[key], src=IMGS[c.img];
+  if(!src || !c.frames) return;
+  const [sx,sy,sw,sh,fx,footY]=c.frames[c.roles.idle[0]];
+  ctx.save();
+  if(filt) ctx.filter=filt;
+  ctx.drawImage(src, sx,sy,sw,sh, cx-fx*scale, baseY-footY*scale, sw*scale, sh*scale);
+  ctx.restore();
+}
+
+function drawSelect(){
+  drawBG();
+  ctx.fillStyle='rgba(0,0,10,.62)'; ctx.fillRect(0,0,W,H);
+  pxText('SELECT  YOUR  FIGHTER',W/2,56,34,'#ffd24a');
+  // ロスター数に応じて箱幅を自動調整（5〜6体でも横一列に収める）
+  const n=ROSTER.length, boxH=270, gap=12, by=104, margin=20;
+  const boxW=Math.min(192, Math.floor((W-margin*2-(n-1)*gap)/n));
+  const total=n*boxW+(n-1)*gap, x0=(W-total)/2;
+  const previewScale=Math.max(0.5, Math.min(0.95, boxW/200));
+  for(let i=0;i<n;i++){
+    const x=x0+i*(boxW+gap);
+    const key=ROSTER[i];
+    const selBy1=(game.sel[0]===i);
+    const selBy2=(game.selPhase===1 && game.sel[1]===i);
+    ctx.fillStyle='rgba(20,24,48,.85)'; ctx.fillRect(x,by,boxW,boxH);
+    ctx.lineWidth=5;
+    if(selBy1){ ctx.strokeStyle=(game.frame%20<12)?'#ff5a2a':'#c83018'; ctx.strokeRect(x-3,by-3,boxW+6,boxH+6); }
+    if(selBy2){ ctx.strokeStyle=(game.frame%20<12)?'#3a8cf4':'#1a5cb4'; ctx.strokeRect(x+4,by+4,boxW-8,boxH-8); }
+    if(!selBy1&&!selBy2){ ctx.strokeStyle='#555'; ctx.lineWidth=2; ctx.strokeRect(x,by,boxW,boxH); }
+    const mirror=(game.selPhase===1 && game.sel[0]===game.sel[1] && game.sel[1]===i);
+    drawCharPreview(key, x+boxW/2, by+boxH-52, previewScale, mirror?'hue-rotate(200deg) saturate(110%)':'');
+    pxText(CHARS[key].name, x+boxW/2, by+boxH-30, boxW<150?15:18, '#fff');
+    pxText(CHARS[key].title, x+boxW/2, by+boxH-12, boxW<150?10:12, '#caa');
+  }
+  if(game.selPhase===0){
+    pxText(game.mode==='2p'?'P1: ←→で選択  F / ENTERで決定':'←→で選択  F / ENTERで決定',W/2,440,17,'#8fd');
+  }else{
+    pxText('P2: ←→で選択  K / ENTERで決定',W/2,440,17,'#f9a');
+  }
+  pxText('ESCでタイトルへ',W/2,468,13,'#cbb');
+}
+
+function drawStageSel(){
+  // ハイライト中のステージを全画面プレビュー（RANDOMは一定間隔で巡回表示）
+  const id = game.stageIdx===0
+    ? STAGE_IDS[Math.floor(game.frame/30)%STAGE_IDS.length]
+    : STAGE_IDS[game.stageIdx-1];
+  const img=IMGS[id];
+  if(img) ctx.drawImage(img,0,0,W,H);
+  else { ctx.fillStyle='#101018'; ctx.fillRect(0,0,W,H); }
+  ctx.fillStyle='rgba(0,0,10,.38)'; ctx.fillRect(0,0,W,H);
+  pxText('SELECT  STAGE',W/2,56,34,'#ffd24a');
+  const label = game.stageIdx===0 ? 'RANDOM' : STAGES[id].name;
+  pxText('◀   '+label+'   ▶',W/2,H-104,30,(game.frame%30<20)?'#fff':'#ffd24a');
+  pxText(game.stageIdx===0
+    ? 'おまかせ（全'+STAGE_IDS.length+'ステージから抽選）'
+    : game.stageIdx+' / '+STAGE_IDS.length,
+    W/2,H-70,14,'#cbb');
+  pxText('←→で選択  F / ENTERで決定  ESCでタイトルへ',W/2,H-38,15,'#8fd');
+}
+
+function drawStory(){
+  drawBG();
+  ctx.fillStyle='rgba(0,0,12,.72)'; ctx.fillRect(0,0,W,H);
+  const me=CHARS[game.storyChar];
+  drawCharPreview(game.storyChar, 130, 430, 1.5, '');
+  pxText(me.name+'  STORY', W/2, 60, 30, '#ffd24a');
+  const n=game.storyNodes[game.storyIdx];
+  const lines=n.lines;
+  for(let i=0;i<lines.length;i++){
+    pxText(lines[i], 264, 140+i*36, 19, '#fbe9c0', 'left');
+  }
+  if(game.frame%40<28) pxText('▶ ENTER', W-90, H-40, 17, '#fff');
+}
+
+function drawLoading(){
+  ctx.fillStyle='#07070f'; ctx.fillRect(0,0,W,H);
+  const dots='.'.repeat((game.frame>>4)%4);
+  pxText('LOADING'+dots,W/2,H/2,28,'#ffd24a');
+}
+
+function render(){
+  if(!assetsLoaded){ drawLoading(); return; }
+  if(game.state==='title'){ drawTitle(); return; }
+  if(game.state==='select'){ drawSelect(); return; }
+  if(game.state==='stagesel'){ drawStageSel(); return; }
+  if(game.state==='story'){ drawStory(); return; }
+  ctx.save();
+  if(game.shake>0){ game.shake--; ctx.translate((Math.random()-0.5)*9,(Math.random()-0.5)*9); }
+  drawBG();
+  // スーパーコンボKO演出: 4フレームの放射バーストを画面全体に拡大表示（キャラ背面・HUDより下）。
+  // render側で減算するため、ヒットストップ/KO停止中も再生が進み、終了後は確実に消える。
+  if(game.superFxT>0){
+    const fx=IMGS.superfx;
+    if(fx){
+      const fw=fx.width/4, fh=fx.height;                                  // 1280x240 → 320x240 ×4
+      const fi=Math.min(3, ((SUPERFX_DUR-game.superFxT)/(SUPERFX_DUR/4))|0); // 左から順に再生
+      const sc=Math.max(W/fw, H/fh);                                       // 中央基準カバーフィット
+      const dw=fw*sc, dh=fh*sc;
+      ctx.drawImage(fx, fi*fw,0,fw,fh, (W-dw)/2,(H-dh)/2, dw,dh);
+    }
+    game.superFxT--;
+  }
+  for(const pr of projectiles) drawProj(pr);
+  p1.draw(); p2.draw();
+  if(p1.state==='beam') drawBeamSuper(p1);
+  if(p2.state==='beam') drawBeamSuper(p2);
+  for(const p of particles){
+    ctx.fillStyle=p.col;
+    ctx.fillRect(p.x-2,p.y-2, p.life>6?5:3, p.life>6?5:3);
+  }
+  ctx.restore();
+  drawHUD();
+  // 状態テキスト
+  if(game.state==='intro'){
+    if(game.stateTimer>45) pxText('ROUND '+game.round,W/2,H/2-30,52,'#ffd24a');
+    else pxText('FIGHT!',W/2,H/2-30,64,'#ff5a2a');
+  }
+  if(game.state==='ko' && game.stateTimer>60){
+    pxText(game.koText,W/2,H/2-40,game.koText==='K.O.'?96:56,'#ff2a2a');
+    if(game.winner<0) pxText('DRAW',W/2,H/2+30,36,'#fff');
+  }
+  if(game.state==='matchend'){
+    if(game.mode==='story'){
+      if(game.winner===0){
+        pxText('VICTORY!',W/2,H/2-40,52,'#ffd24a');
+        if(game.frame%40<28) pxText('ENTERで物語を進める',W/2,H/2+30,22,'#fff');
+      }else{
+        pxText('CONTINUE?',W/2,H/2-40,52,'#ff5a2a');
+        if(game.frame%40<28) pxText('ENTERで再挑戦 / ESCでタイトルへ',W/2,H/2+30,22,'#fff');
+      }
+    }else{
+      const wname=(game.winner===0?p1.name:p2.name)+((game.mode==='cpu'&&game.winner===1)?' (CPU)':'');
+      pxText(wname+'  WINS!',W/2,H/2-40,52,'#ffd24a');
+      if(game.frame%40<28) pxText('PRESS ENTER',W/2,H/2+30,22,'#fff');
+    }
+  }
+  if(game.flash>0){
+    game.flash--;
+    ctx.fillStyle='rgba(255,255,255,'+(game.flash/16)+')';
+    ctx.fillRect(0,0,W,H);
+  }
+}
+
+// ================= メインループ =================
+let last=performance.now(), acc=0;
+function loop(ts){
+  requestAnimationFrame(loop);
+  acc+=Math.min(60,ts-last); last=ts;
+  while(acc>=STEP){ step(); acc-=STEP; }
+  render();
+}
+loadAssets();
+loadSounds();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

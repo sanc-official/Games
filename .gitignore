@@ -1,0 +1,9 @@
+# macOS
+.DS_Store
+
+# ローカル起動用ランチャー（パス埋め込みのため公開不要）
+*.command
+
+# 開発メモ・未使用ドラフト
+DEVNOTES.md
+story-draft.js
