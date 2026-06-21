@@ -359,7 +359,7 @@ let assetsLoaded=false;
 //  - 探索領域は横=セル厳守（隣接ポーズ混入防止）、縦=上32%/下10%まで拡張（頭・足のはみ出し回収）
 //  - セル内に種を持つ連結成分のうち主要なもの（最大成分の22%以上）だけを採用 → 隣の頭の断片を除外
 //  - cx は bbox中央ではなく「足元（bbox下端15%）の不透明ピクセル重心X」→ 横長エフェクト入りでもズレない
-function sliceSheetByGrid(img, cols, rows){
+function sliceSheetByGrid(img, cols, rows, groundIdx){
   const cw=img.width/cols, ch=img.height/rows;
   const oc=document.createElement('canvas'); oc.width=img.width; oc.height=img.height;
   const octx=oc.getContext('2d'); octx.drawImage(img,0,0);
@@ -416,6 +416,13 @@ function sliceSheetByGrid(img, cols, rows){
       // （セル幅が非整数のシートで隣の列のポーズが同セルに入り込む対策）
       const main=keep.reduce((a,b)=>a.nIn>=b.nIn?a:b);
       keep=keep.filter(o=> o===main || (o.minX<=main.maxX+8 && o.maxX>=main.minX-8));
+      // 接地フレーム（ダウン等）対策: 生成シートは1セルに上下2ポーズ（のけぞり＋仰向け）を
+      // 描くことがあり、X範囲が重なると両方残って1枠に2体描かれ「分裂」して見える。
+      // この種のフレームでは最も低い（接地した）成分のクラスタだけ残し、上の別ポーズを捨てる。
+      if(groundIdx && groundIdx.has(r*cols+c) && keep.length>1){
+        const lowest=keep.reduce((a,b)=> a.maxY>=b.maxY?a:b);
+        keep=keep.filter(o=> o.maxY>=lowest.minY && o.minY<=lowest.maxY); // lowest とY重なりのある成分のみ
+      }
       const keepIds=new Set(keep.map(o=>o.id));
       let minX=W2,maxX=0,minY=H2,maxY=0;
       for(const o of keep){
@@ -469,7 +476,7 @@ function loadAssets(){
       IMGS[key]=im;
       // 生成シート（8x4）はロード時にセル分割してフレーム配列を作る
       if(key==='kensei') CHARS.kenseiNova.frames=sliceSheetByGrid(im,8,4);
-      else if(key==='prism') CHARS.prismGuard.frames=sliceSheetByGrid(im,8,4);
+      else if(key==='prism') CHARS.prismGuard.frames=sliceSheetByGrid(im,8,4,new Set([28])); // 28=ダウン: 1セルに2ポーズで分裂するため接地側のみ採用
       else if(key==='prismx') CHARS.prismGuard.extraFrames=sliceSheetByGrid(im,8,4);
       done();
     };
