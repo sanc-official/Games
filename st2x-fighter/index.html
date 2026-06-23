@@ -483,9 +483,10 @@ function loadAssets(){
       // 生成シート（8x4）はロード時にセル分割してフレーム配列を作る
       if(key==='kensei') CHARS.kenseiNova.frames=sliceSheetByGrid(im,8,4);
       // 第4=ダウン(28)は1セルに2ポーズあるため接地側のみ採用。
-      // 第5=横はみ出しを追うフレーム: 11/12=立ちパンチの拳, 20=ビームの腕, 28=ダウンの胴体。
+      // 第5=横はみ出しを追うフレーム: 11/12=立ちパンチの拳, 20=ビームの腕,
+      //   26/27=空中やられ(吹き飛びで体が横に伸びる), 28=ダウンの胴体。
       // ハイキック(13/14)等は隣ポーズが近く巻き込むため対象外。
-      else if(key==='prism') CHARS.prismGuard.frames=sliceSheetByGrid(im,8,4,new Set([28]),new Set([11,12,20,28]));
+      else if(key==='prism') CHARS.prismGuard.frames=sliceSheetByGrid(im,8,4,new Set([28]),new Set([11,12,20,26,27,28]));
       else if(key==='prismx') CHARS.prismGuard.extraFrames=sliceSheetByGrid(im,8,4);
       done();
     };
@@ -2034,8 +2035,11 @@ function render(){
   if(game.state==='select'){ drawSelect(); return; }
   if(game.state==='stagesel'){ drawStageSel(); return; }
   if(game.state==='story'){ drawStory(); return; }
+  // 画面揺れは背景・演出・キャラに同じオフセットで適用（HUDは揺らさない）
+  let _shx=0,_shy=0;
+  if(game.shake>0){ game.shake--; _shx=(Math.random()-0.5)*9; _shy=(Math.random()-0.5)*9; }
   ctx.save();
-  if(game.shake>0){ game.shake--; ctx.translate((Math.random()-0.5)*9,(Math.random()-0.5)*9); }
+  ctx.translate(_shx,_shy);
   drawBG();
   // スーパーコンボKO演出: 4フレームの放射バーストを画面全体に拡大表示（キャラ背面・HUDより下）。
   // render側で減算するため、ヒットストップ/KO停止中も再生が進み、終了後は確実に消える。
@@ -2054,13 +2058,17 @@ function render(){
   // ビーム超必は演出を先に描き、キャラを前面に重ねる（発射ポーズの腕・体が発射口フラッシュで隠れないように）
   if(p1.state==='beam') drawBeamSuper(p1);
   if(p2.state==='beam') drawBeamSuper(p2);
+  ctx.restore();
+  // HUDをキャラより先に描く: 空中に高く打ち上がってもキャラがHUDバーで途切れて見えないように。
+  drawHUD();
+  ctx.save();
+  ctx.translate(_shx,_shy);
   p1.draw(); p2.draw();
   for(const p of particles){
     ctx.fillStyle=p.col;
     ctx.fillRect(p.x-2,p.y-2, p.life>6?5:3, p.life>6?5:3);
   }
   ctx.restore();
-  drawHUD();
   // 状態テキスト
   if(game.state==='intro'){
     if(game.stateTimer>45) pxText('ROUND '+game.round,W/2,H/2-30,52,'#ffd24a');
