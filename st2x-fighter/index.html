@@ -476,7 +476,12 @@ function loadAssets(){
       IMGS[key]=im;
       // 生成シート（8x4）はロード時にセル分割してフレーム配列を作る
       if(key==='kensei') CHARS.kenseiNova.frames=sliceSheetByGrid(im,8,4);
-      else if(key==='prism') CHARS.prismGuard.frames=sliceSheetByGrid(im,8,4,new Set([28])); // 28=ダウン: 1セルに2ポーズで分裂するため接地側のみ採用
+      else if(key==='prism'){
+        CHARS.prismGuard.frames=sliceSheetByGrid(im,8,4,new Set([28])); // 28=ダウン: 1セルに2ポーズで分裂するため接地側のみ採用
+        // ダウン(28)は仰向けの胴体が横にセル外へはみ出すため自動スライスだと幅が足りず上半身しか出ない。
+        // 実測の全身bbox[sx,sy,sw,sh,cx,footY]で上書きする。
+        CHARS.prismGuard.frames[28]=[856,887,180,78,98,78];
+      }
       else if(key==='prismx') CHARS.prismGuard.extraFrames=sliceSheetByGrid(im,8,4);
       done();
     };
@@ -2042,9 +2047,10 @@ function render(){
     game.superFxT--;
   }
   for(const pr of projectiles) drawProj(pr);
-  p1.draw(); p2.draw();
+  // ビーム超必は演出を先に描き、キャラを前面に重ねる（発射ポーズの腕・体が発射口フラッシュで隠れないように）
   if(p1.state==='beam') drawBeamSuper(p1);
   if(p2.state==='beam') drawBeamSuper(p2);
+  p1.draw(); p2.draw();
   for(const p of particles){
     ctx.fillStyle=p.col;
     ctx.fillRect(p.x-2,p.y-2, p.life>6?5:3, p.life>6?5:3);
