@@ -138,7 +138,7 @@ const ROLES_KENSEI={ idle:[0,1,2], walk:[3,4,5,6], crouch:8, gStand:19, gCrouch:
 // row4=上段蹴り(24) 膝(25) 浮かされ(26) 落下(27) ダウン(28,29) 起き(30) 勝利(31)
 // 18/21〜23 はキャラ不在 or ビーム合成セルなので使わない（dp/ガード等は追加シートを prismExtra で使用）
 const ROLES_PRISM={ idle:[0,1,2], walk:[3,4,5,6], crouch:8, gStand:16, gCrouch:9,
-  lp:[11,12], clp:10, hk:[12,13], sweep:10, fb:[15,17], dp:24, rush:25,
+  lp:[11,12], clp:10, hk:[12,13], sweep:25, fb:[15,17], dp:24, rush:25,
   jump:24, jkick:[24,24], hit:[26,26], fall:[26,27], down:28, getup:[30,30], win:31,
   beam:[15,20] };   // 巨大ビーム超必: 溜め=チャージ(15) / 発射=前方ストライク(20)。
                     // 追加シートの30/31はビーム爆発が主体でキャラが見えないため使わない
@@ -359,7 +359,7 @@ let assetsLoaded=false;
 //  - 探索領域は横=セル厳守（隣接ポーズ混入防止）、縦=上32%/下10%まで拡張（頭・足のはみ出し回収）
 //  - セル内に種を持つ連結成分のうち主要なもの（最大成分の22%以上）だけを採用 → 隣の頭の断片を除外
 //  - cx は bbox中央ではなく「足元（bbox下端15%）の不透明ピクセル重心X」→ 横長エフェクト入りでもズレない
-function sliceSheetByGrid(img, cols, rows, groundIdx){
+function sliceSheetByGrid(img, cols, rows, groundIdx, hxSet){
   const cw=img.width/cols, ch=img.height/rows;
   const oc=document.createElement('canvas'); oc.width=img.width; oc.height=img.height;
   const octx=oc.getContext('2d'); octx.drawImage(img,0,0);
@@ -376,9 +376,15 @@ function sliceSheetByGrid(img, cols, rows, groundIdx){
       if(!data){ frames.push(fallback); continue; }
       const yT=Math.max(0, y0-Math.round(ch*0.32));
       const yB=Math.min(H2-1, y1+Math.round(ch*0.10));
-      const rw=x1-x0+1, rh=yB-yT+1;
+      // 横方向の探索拡張は hxSet に含まれるフレームのみ（手足がセル境界を越えて伸びるフレーム対策）。
+      // 全フレーム拡張すると隣接ポーズが近いキック等で隣を巻き込むため、対象を限定する。
+      // 種はセル内限定なので、透明ギャップで分かれた隣ポーズは別成分として拾わない。
+      const hExp=(hxSet && hxSet.has(r*cols+c)) ? 0.45 : 0;
+      const xL=Math.max(0, x0-Math.round(cw*hExp));
+      const xR=Math.min(W2-1, x1+Math.round(cw*hExp));
+      const rw=xR-xL+1, rh=yB-yT+1;
       const lab=new Int32Array(rw*rh).fill(-1);
-      const li=(x,y)=>(y-yT)*rw+(x-x0);
+      const li=(x,y)=>(y-yT)*rw+(x-xL);
       // セル内を種に8近傍BFSで連結成分を列挙（縦の拡張域へは伸びてよい）
       const comps=[]; const stack=[];
       for(let sy=y0;sy<=y1;sy++)for(let sx=x0;sx<=x1;sx++){
@@ -395,7 +401,7 @@ function sliceSheetByGrid(img, cols, rows, groundIdx){
           for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
             if(!dx&&!dy) continue;
             const nx=px+dx, ny=py+dy;
-            if(nx<x0||nx>x1||ny<yT||ny>yB) continue;
+            if(nx<xL||nx>xR||ny<yT||ny>yB) continue;
             if(!opaque(nx,ny) || lab[li(nx,ny)]>=0) continue;
             lab[li(nx,ny)]=id; stack.push(nx,ny);
           }
@@ -437,7 +443,7 @@ function sliceSheetByGrid(img, cols, rows, groundIdx){
       const fy0=Math.max(minY, maxY-Math.max(2,Math.round(sh*0.15)));
       let sum=0,cnt=0;
       for(let y=fy0;y<=maxY;y++)for(let x=minX;x<=maxX;x++){
-        if(x<x0||x>x1||y<yT||y>yB) continue;
+        if(x<xL||x>xR||y<yT||y>yB) continue;
         const v=lab[li(x,y)];
         if(v>=0 && keepIds.has(v)){ sum+=x; cnt++; }
       }
@@ -476,12 +482,10 @@ function loadAssets(){
       IMGS[key]=im;
       // 生成シート（8x4）はロード時にセル分割してフレーム配列を作る
       if(key==='kensei') CHARS.kenseiNova.frames=sliceSheetByGrid(im,8,4);
-      else if(key==='prism'){
-        CHARS.prismGuard.frames=sliceSheetByGrid(im,8,4,new Set([28])); // 28=ダウン: 1セルに2ポーズで分裂するため接地側のみ採用
-        // ダウン(28)は仰向けの胴体が横にセル外へはみ出すため自動スライスだと幅が足りず上半身しか出ない。
-        // 実測の全身bbox[sx,sy,sw,sh,cx,footY]で上書きする。
-        CHARS.prismGuard.frames[28]=[856,887,180,78,98,78];
-      }
+      // 第4=ダウン(28)は1セルに2ポーズあるため接地側のみ採用。
+      // 第5=横はみ出しを追うフレーム: 11/12=立ちパンチの拳, 20=ビームの腕, 28=ダウンの胴体。
+      // ハイキック(13/14)等は隣ポーズが近く巻き込むため対象外。
+      else if(key==='prism') CHARS.prismGuard.frames=sliceSheetByGrid(im,8,4,new Set([28]),new Set([11,12,20,28]));
       else if(key==='prismx') CHARS.prismGuard.extraFrames=sliceSheetByGrid(im,8,4);
       done();
     };
