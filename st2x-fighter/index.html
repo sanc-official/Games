@@ -277,6 +277,56 @@ const OPPONENTS={
   brontEnforcer:{char:'bront', name:'財団の重装回収屋',stage:'neon', intro:'逃げた兵器は回収する。それが俺の契約だ。'},
   gouma:        {char:'gouma', name:'ゴウマ',        stage:'neon',   intro:'最終戦闘データを取得する。敗北は許可されていない。'},
 };
+// 対戦前の掛け合い: [相手ID][プレイヤーキャラID] = { opp:相手セリフ(プレイヤー別に分岐), reply:自キャラの返し }
+// ルート上で当たる組み合わせのみ定義。未定義の組はOPPONENTS.introを相手セリフに使う（返しなし）。
+const VS_DIALOG={
+  alleyGuard:{
+    ryuji:{opp:'ここから先は招待客だけだ。拳で通行証を見せな。', reply:'その通行証ならこの拳にある。兄を探してる、通すぞ。'},
+    aoi:{opp:'ジム上がりの嬢ちゃんが何の用だ。遊び場じゃねえぞ。', reply:'遊びじゃない。潰された仲間の分まで、退いてもらう。'},
+    sayo:{opp:'影みてえにすり抜けやがって。賞金首か？', reply:'人違い。今日は私が狩る番。そこ、どいて。'},
+    kenseiNova:{opp:'白い道着……道場破りのつもりか？', reply:'破るのではない、確かめるだけだ。師の拳が通じるかをな。'},
+  },
+  harborHunter:{
+    ryuji:{opp:'兄を探す坊や？ 情報はタダじゃない。まず私を黙らせな。', reply:'なら口より先に、その足を止める。'},
+    aoi:{opp:'財団のデータ狙い？ 同じ獲物を追う者同士、潰し合おう。', reply:'獲物じゃない、仲間の名誉よ。あなたには渡さない。'},
+    bront:{opp:'鉄屑街の怪腕がなぜここに。あんたの賞金、上がってるよ。', reply:'金の話はもう終いだ。退かねえなら、力ずくで通る。'},
+    kenseiNova:{opp:'道場印を探す求道者か。悪いが、それも金になる。', reply:'印は売り物ではない。引いてくれ。'},
+  },
+  ryujiRival:{
+    aoi:{opp:'君も財団を追うのか。だが、先は譲れない。', reply:'譲ってとは言わない。実力で抜く。'},
+    bront:{opp:'怪腕のブロント……契約を破ったらしいな。', reply:'ああ、守るもんを思い出した。退け、坊主。'},
+    sayo:{opp:'影足のサヨ。証人を狙う連中とは違うらしいな。', reply:'ええ、私は狩る側。あなたの本気、見せて。'},
+    prismGuard:{opp:'ヘッドギアの兵士か。財団の犬には見えんが。', reply:'もう誰の犬でもない。確かめたきゃ、拳で来い。'},
+  },
+  aoiRival:{
+    ryuji:{opp:'あんたも財団を追ってるの？ なら、まず実力を見せて。', reply:'兄の手がかりがその先にある。悪いが、本気で行く。'},
+    bront:{opp:'用心棒上がりが寝返った？ 信じていいの？', reply:'信じなくていい。拳で示す、それだけだ。'},
+    sayo:{opp:'証人さん、ひとりで抱えないで。私も財団が憎い。', reply:'なら尚更、退けない。あなたの覚悟、試させて。'},
+    kenseiNova:{opp:'道着の人、迷いがないのね。少し羨ましい。', reply:'迷いはある。だが拳に込めれば、前へ進める。'},
+    prismGuard:{opp:'計画から逃げた兵士？ 利用されただけかも。', reply:'利用されない力を、今ここで証明する。'},
+  },
+  exTrainer:{
+    aoi:{opp:'教え子のお前が、また拳を握るとはな。', reply:'あなたに習った拳で、今度は奪い返す。'},
+    sayo:{opp:'夜を生きる足取りだ。だが勝負はリングの上だけじゃない。', reply:'ええ。だから今、ここで決める。'},
+  },
+  silentWitness:{
+    ryuji:{opp:'兄を探すうち、見すぎたみたいね。引き返せないよ。', reply:'引き返す気はない。真実まで、押し通る。'},
+    bront:{opp:'契約を破った大男。あんたも、もう戻れない側だ。', reply:'戻る気はねえ。守るもんの前だ、退いてくれ。'},
+    kenseiNova:{opp:'求道者が財団に触れた。沈黙では済まなくなったね。', reply:'語るは拳のみ。来るがいい。'},
+    prismGuard:{opp:'兵器のあんたが逃げた理由、私は知ってる。', reply:'なら見届けろ。この光が、誰のものでもないことを。'},
+  },
+  brontEnforcer:{
+    prismGuard:{opp:'逃げた兵器は回収する。それが俺の契約だ。', reply:'兵器じゃない、俺は人間だ。回収されてやる気はない。'},
+  },
+  gouma:{
+    ryuji:{opp:'お前の兄のデータは良好だった。次はお前を測定する。', reply:'……兄を知ってるのか。だったら、全部聞き出す。'},
+    aoi:{opp:'奪ったデータも、じき無意味になる。測定を始める。', reply:'仲間の名は数字じゃない。あんたを止めて証明する。'},
+    bront:{opp:'契約違反者を回収する。抵抗は最終データに記録する。', reply:'記録ごと、ぶっ壊してやる。'},
+    sayo:{opp:'証拠は消す。お前の沈黙も、ここで完成させる。', reply:'消せないよ。私の映像は、もう街に流れてる。'},
+    kenseiNova:{opp:'継承された拳など、ただの旧式データだ。', reply:'旧くとも、折れぬ。師の拳を思い知れ。'},
+    prismGuard:{opp:'失敗作が戻ったか。最大出力で再測定する。', reply:'失敗作じゃない。この光で、計画ごと焼き切る。'},
+  },
+};
 const STORIES={
   ryuji:{ title:'消えた兄の影',
     intro:'リュウジは失踪した兄の手がかりを追い、非公式格闘大会 STREET VEIN に踏み込む。',
@@ -1365,7 +1415,11 @@ function storyStart(cid){
   ];
   for(const oid of st.route){
     const o=OPPONENTS[oid];
-    nodes.push({type:'text', bg:o.stage, lines:['VS  '+o.name,'',...wrapText('「'+o.intro+'」',24)]});
+    // 相手セリフはプレイヤー別に分岐、さらに自キャラの返しを下に表示（掛け合い）。未定義はintroで代替。
+    const d=(VS_DIALOG[oid] && VS_DIALOG[oid][cid]) || {opp:o.intro, reply:''};
+    const lines=['VS  '+o.name,'',...wrapText('「'+d.opp+'」',22)];
+    if(d.reply) lines.push('',...wrapText(CHARS[cid].name+'「'+d.reply+'」',22));
+    nodes.push({type:'text', bg:o.stage, lines});
     nodes.push({type:'fight', opp:o.char, oppName:o.name, stage:o.stage});
   }
   nodes.push({type:'text', bg:'neon', ending:true, lines:[...wrapText(st.ending,24),'','── '+CHARS[cid].name+'  STORY CLEAR ──']});
