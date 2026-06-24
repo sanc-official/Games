@@ -154,29 +154,29 @@ const EXTRA_PRISM={
 
 // ================= キャラクター定義 =================
 const CHARS={
-  ryuji:{ id:'ryuji', name:'リュウジ', title:'港町の拳', img:'ryuji', frames:F_RYUJI, scale:1.32, roles:ROLES_RYUJI, voice:'ryuji',
+  ryuji:{ id:'ryuji', name:'リュウジ', title:'港町の拳', img:'ryuji', frames:F_RYUJI, scale:1.19, roles:ROLES_RYUJI, voice:'ryuji',
     sp:{ fb:{type:'proj', name:'烈火弾', spd:6.2, dmg:10, r:20},
          dp:{name:'牙昇拳', dmg:16, vy:-13.5},
          tatsu:{type:'rush', name:'旋風脚', spd:7.5, dmg:12, dur:22},
          sup:{type:'proj', name:'嵐砕波', spd:9.5, dmg:30, r:30} }},
-  aoi:{ id:'aoi', name:'アオイ', title:'奪われたリング', img:'aoi', frames:F_AOI, scale:1.29, roles:ROLES_AOI, voice:'aoi',
+  aoi:{ id:'aoi', name:'アオイ', title:'奪われたリング', img:'aoi', frames:F_AOI, scale:1.03, spd:1.1, roles:ROLES_AOI, voice:'aoi',
     sp:{ fb:{type:'proj', name:'弧月針', spd:7.6, dmg:9, r:14, life:40},
          dp:{name:'天砕踵', dmg:15, vy:-14.5},
          tatsu:{type:'rush', name:'螺旋穿ち', spd:10, dmg:13, dur:18, low:true},
          sup:{type:'rush', name:'流星連脚', spd:11, dmg:32, dur:20} }},
-  bront:{ id:'bront', name:'ブロント', title:'鉄屑街の怪腕', img:'bront', frames:F_BRONT, scale:1.32, roles:ROLES_GEN, voice:'bront',
+  bront:{ id:'bront', name:'ブロント', title:'鉄屑街の怪腕', img:'bront', frames:F_BRONT, scale:1.58, roles:ROLES_GEN, voice:'bront',
     sp:{ fb:{type:'rush', name:'アイアンショルダー', spd:8.5, dmg:14, dur:20},
          dp:{name:'クレーンキャッチ', dmg:18, vy:-10, airGrab:true},
          cmdGrab:{name:'ブレイカークラッチ', dmg:22, range:62},
          supGrab:{name:'スクラップサイクロン', dmg:34, range:66},
          sup:{type:'rush', name:'スクラップサイクロン', spd:9.5, dmg:30, dur:22} }},
-  sayo:{ id:'sayo', name:'サヨ', title:'夜路地の影足', img:'sayo', frames:F_SAYO, scale:1.30, roles:ROLES_GEN, voice:'sayo',
+  sayo:{ id:'sayo', name:'サヨ', title:'夜路地の影足', img:'sayo', frames:F_SAYO, scale:1.04, spd:1.2, roles:ROLES_GEN, voice:'sayo',
     sp:{ fb:{type:'rush', name:'閃影スライド', spd:12, dmg:10, dur:16, low:true},
          dp:{name:'月影膝', dmg:14, vy:-15.5},
          tatsu:{type:'move', name:'扇歩', spd:9, dur:10},
          mash:{name:'百裂掌', dmg:4},
          sup:{type:'rush', name:'夜霞三連', spd:13, dmg:30, dur:20, low:true} }},
-  gouma:{ id:'gouma', name:'ゴウマ', title:'無敗の実験格闘家', img:'gouma', frames:F_GOUMA, scale:1.31, roles:ROLES_GOUMA, voice:'gouma', boss:true,
+  gouma:{ id:'gouma', name:'ゴウマ', title:'無敗の実験格闘家', img:'gouma', frames:F_GOUMA, scale:1.24, roles:ROLES_GOUMA, voice:'gouma', boss:true,
     sp:{ fb:{type:'proj', name:'虚空弾', spd:8.6, dmg:12, r:22, warm:true},
          airFb:{name:'空虚弾', spd:7, vy:3.4, dmg:10, r:18, warm:true},
          dp:{name:'紅蓮昇', dmg:20, vy:-14},
@@ -185,7 +185,7 @@ const CHARS={
          sup:{type:'proj', name:'殲滅核', spd:11, dmg:38, r:34, warm:true} }},
   // ケンセイ・ノヴァ: 白道着＋赤グローブのオリジナル。リュウジ系の波動昇龍型（別スキン相当）。
   // char-kensei-nova.png は 1536x1024 / 8x4 の生成シート → sliceSheetByGrid で切り出し、ROLES_GEN を使用。
-  kenseiNova:{ id:'kenseiNova', name:'ケンセイ・ノヴァ', title:'白道着の閃', img:'kensei', frames:null, scale:1.26, roles:ROLES_KENSEI, voice:'kensei',
+  kenseiNova:{ id:'kenseiNova', name:'ケンセイ・ノヴァ', title:'白道着の閃', img:'kensei', frames:null, scale:1.13, roles:ROLES_KENSEI, voice:'kensei',
     sp:{ fb:{type:'proj', name:'閃光弾', spd:6.6, dmg:10, r:20},
          dp:{name:'昇閃拳', dmg:16, vy:-13.5},
          tatsu:{type:'rush', name:'旋衝脚', spd:7.8, dmg:12, dur:22},
@@ -193,7 +193,7 @@ const CHARS={
   // プリズムガード: ビーム特化のオリジナルキャラ。横ビーム/対空/連打/足元ビーム/巨大ビーム超必。
   // base = char-prism-guard.png (1536x1024 / 8x4), extra = char-prism-guard-extra.png (1717x916 / 8x4)。
   // どちらも sliceSheetByGrid(img, 8, 4) で image.width/8, image.height/4 ごとに切る。
-  prismGuard:{ id:'prismGuard', name:'プリズムガード', title:'光学戦術兵', img:'prism', frames:null, scale:1.21, roles:ROLES_PRISM, voice:'prism',
+  prismGuard:{ id:'prismGuard', name:'プリズムガード', title:'光学戦術兵', img:'prism', frames:null, scale:1.09, roles:ROLES_PRISM, voice:'prism',
     extraImg:'prismx', extraFrames:null, extra:EXTRA_PRISM,
     sp:{ fb:{type:'proj', name:'プリズムショット', spd:11, dmg:11, r:14, beamThin:true},   // 236P 細い水平ビーム
          dp:{name:'ライジングプリズム', dmg:15, vy:-13.5},                                   // 623P 対空アッパー
@@ -329,32 +329,32 @@ const VS_DIALOG={
 };
 const STORIES={
   ryuji:{ title:'消えた兄の影',
-    intro:'リュウジは失踪した兄の手がかりを追い、非公式格闘大会 STREET VEIN に踏み込む。',
+    intro:'港町でジムを継ぐはずだった兄が、地下大会 STREET VEIN を最後に消えた。残された出場登録証を握り、リュウジは財団の興行へ単身踏み込む。',
     route:['alleyGuard','harborHunter','aoiRival','silentWitness','gouma'],
     ending:'兄は戻らない。それでもリュウジは拳を握り、財団の奥へ進む。',
     epilogue:['クロガネ財団は崩れ、地下大会 STREET VEIN は静かに幕を閉じた。','兄の消えた研究棟で、リュウジは古いグローブを一つだけ見つける。','「まだ終わっちゃいない」——港町に戻った拳は、次の手がかりを探し続ける。'] },
   aoi:{ title:'奪われたリング',
-    intro:'アオイは潰されたジムの名誉を取り戻すため、クロガネ財団の大会に挑む。',
+    intro:'アオイのジムは、クロガネ財団に試合を仕組まれ潰された。仲間は散り、残ったのはリングネームだけ。奪われた名誉とデータを取り戻すため、彼女は敵が主催する大会へ自ら上がる。',
     route:['alleyGuard','harborHunter','ryujiRival','exTrainer','gouma'],
     ending:'アオイは財団のデータを奪い、仲間たちの名前を背負って次の戦いへ向かう。',
     epilogue:['奪い返したデータは、潰されたジムの不正を白日の下にさらした。','仲間たちのリングネームが、もう一度ポスターに並ぶ。','アオイは新しいジムの扉を開ける。今度は、誰にも奪わせない。'] },
   bront:{ title:'鉄屑街の怪腕',
-    intro:'ブロントは借金の帳消しを条件に大会の用心棒をしていた。だが財団の人体実験を知り、契約を破る。',
+    intro:'鉄屑街で育ったブロントは、借金の形に財団大会の用心棒をしていた。だが扉の奥の人体実験を目撃し、契約を破る。守るべきは賞金ではなく、街に残した子どもたちだと気づいて。',
     route:['ryujiRival','aoiRival','harborHunter','silentWitness','gouma'],
     ending:'ブロントは賞金を捨て、鉄屑街へ帰る。守るべき場所は、リングの外にもある。',
     epilogue:['賞金には手をつけなかった。借金取りは、もう来ない。','鉄屑街の子どもたちが、怪腕のブロントに駆け寄る。','リングの外にも守るべきものがある——彼はもう、それを知っている。'] },
   sayo:{ title:'夜路地の影足',
-    intro:'サヨは財団の密輸現場を目撃した唯一の証人。追われる側から、狩る側へ回るため大会へ潜入する。',
+    intro:'夜の路地で財団の密輸を撮影した、ただ一人の証人——それがサヨ。追われる日々に終止符を打つため、狩られる側から狩る側へ回り、証拠を手に大会へ潜入する。',
     route:['alleyGuard','aoiRival','ryujiRival','exTrainer','gouma'],
     ending:'サヨの記録映像は街中へ流れた。沈黙していた夜が、ついに財団の名を叫び始める。',
     epilogue:['流出した映像は一晩で街を駆け巡った。','沈黙していた路地に、財団を告発する声が満ちていく。','影足のサヨは次の闇へ消える。狩る側で在り続けるために。'] },
   kenseiNova:{ title:'白道着の継承',
-    intro:'ケンセイ・ノヴァは消えた師の道場印を追って、地下格闘大会へ降りていく。',
+    intro:'師が遺した道場印が、闇市で取引されていた。継承の証を取り戻すため、ケンセイ・ノヴァは白い道着のまま地下大会へ降りる。受け継いだ拳が今も折れず在ることを示すために。',
     route:['alleyGuard','harborHunter','aoiRival','silentWitness','gouma'],
     ending:'白い道着は朝日に染まった。ケンセイは師の拳が確かに受け継がれたことを知る。',
     epilogue:['取り戻した道場印を、ケンセイは静かに師の墓前へ置く。','白い道着に、確かに受け継がれた拳が宿っている。','朝日の差す道場で、彼は新しい弟子に最初の構えを教える。'] },
   prismGuard:{ title:'光に背く兵士',
-    intro:'プリズムガードは財団の光学兵器計画から逃げ出した。自分の力が誰のものでもないと証明するため、戦場へ戻る。',
+    intro:'財団の光学兵器計画——その被験体として造られたのがプリズムガード。ヘッドギアの奥で名前さえ奪われた青年は施設を脱走する。「この力は誰のものでもない」と証明するため、再びリングへ立つ。',
     route:['silentWitness','aoiRival','brontEnforcer','ryujiRival','gouma'],
     ending:'巨大な光は研究施設の夜を裂いた。プリズムガードはヘッドギアを外し、初めて自分の目で朝を見る。',
     epilogue:['研究施設の光学兵器計画は、自らの巨大な光に焼き尽くされた。','ヘッドギアの奥に隠されていたのは、ごく普通の青年の目だった。','「この力は、誰のものでもない」——青年は朝の街へ、ひとり歩き出す。'] },
@@ -1195,7 +1195,7 @@ class Fighter{
           let mv=(inp.right?1:0)-(inp.left?1:0);
           if(mv!==0){
             const fwdMove=(mv===this.facing);
-            this.x+=mv*(fwdMove?3.0:2.4);
+            this.x+=mv*(fwdMove?3.0:2.4)*(this.chr.spd||1);   // chr.spd: キャラ別の移動速度倍率（女性は機敏）
             this.state='walk';
           }else this.state='idle';
         }
